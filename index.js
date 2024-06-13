@@ -16,14 +16,26 @@ requiredEnvVars.forEach((key) => {
 });
 
 // Parse Firebase service account key from environment variable
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+} catch (error) {
+  console.error('Error parsing FIREBASE_SERVICE_ACCOUNT_KEY:', error);
+  process.exit(1);
+}
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Initialize Firebase
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+  console.log('Firebase initialized');
+} catch (error) {
+  console.error('Error initializing Firebase:', error);
+  process.exit(1);
+}
 
 const db = admin.firestore();
 
@@ -61,6 +73,20 @@ bot.onText(/\/register (.+)/, async (msg, match) => {
     }
   });
 
+  // Express app setup
+const app = express();
+app.use(bodyParser.json());
+
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+  // Proceed with registration
   bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. If you are a recruiter, type /setrecruiter to change your role.`);
 });
 
