@@ -59,6 +59,7 @@ const bot = new TelegramBot(token, {
 console.log('Bot is starting...');
 
 bot.onText(/\/start/, (msg) => {
+  console.log('/start command received');
   bot.sendMessage(msg.chat.id, "Welcome to the KarmaComet Bot! Type /register to get started.");
 });
 
@@ -68,6 +69,7 @@ bot.onText(/\/register (.+)/, async (msg, match) => {
   const userName = match[1];
 
   try {
+    console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
     await db.collection('users').doc(chatId.toString()).set({
       name: userName,
       score: 0,
@@ -77,6 +79,7 @@ bot.onText(/\/register (.+)/, async (msg, match) => {
         expiry: null
       }
     });
+    console.log(`User ${userName} registered successfully.`);
 
     bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. If you are a recruiter, type /setrecruiter to change your role.`);
   } catch (error) {
@@ -112,6 +115,7 @@ bot.onText(/\/commit (.+)/, async (msg, match) => {
   const description = descArray.join(' ');
   
   try {
+    console.log(`Logging commitment for user ${chatId}: ${description} on ${date} at ${time}`);
     const docRef = await db.collection('commitments').add({
       userId: chatId.toString(),
       date,
@@ -137,6 +141,7 @@ bot.onText(/\/status (.+)/, async (msg, match) => {
   const [commitmentId, status] = match[1].split(' ');
 
   try {
+    console.log(`Updating status for commitment ${commitmentId} to ${status}`);
     const commitmentRef = db.collection('commitments').doc(commitmentId);
     const commitment = await commitmentRef.get();
 
