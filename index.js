@@ -31,12 +31,20 @@ const db = admin.firestore();
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 // Create a bot that uses 'polling' to fetch new updates
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(token, { 
+  polling: {
+    interval: 1000, // Polling interval in milliseconds (1 second)
+    autoStart: true,
+    params: {
+      timeout: 10
+    }
+  }
+});
 
 console.log('Bot is starting...');
 
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Welcome to the Commitment Bot! Type /register to get started.");
+  bot.sendMessage(msg.chat.id, "Welcome to the KarmaComet Bot! Type /register to get started.");
 });
 
 bot.onText(/\/register (.+)/, async (msg, match) => {
