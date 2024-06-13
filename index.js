@@ -33,6 +33,8 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 // Create a bot that uses 'polling' to fetch new updates
 const bot = new TelegramBot(token, { polling: true });
 
+console.log('Bot is starting...');
+
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(msg.chat.id, "Welcome to the Commitment Bot! Type /register to get started.");
 });
