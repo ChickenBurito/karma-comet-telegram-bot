@@ -15,10 +15,13 @@ requiredEnvVars.forEach((key) => {
   }
 });
 
+console.log('All required environment variables are set.');
+
 // Parse Firebase service account key from environment variable
 let serviceAccount;
 try {
   serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+  console.log('Firebase service account key parsed successfully.');
 } catch (error) {
   console.error('Error parsing FIREBASE_SERVICE_ACCOUNT_KEY:', error);
   process.exit(1);
@@ -72,19 +75,6 @@ bot.onText(/\/register (.+)/, async (msg, match) => {
       expiry: null
     }
   });
-
-  // Express app setup
-const app = express();
-app.use(bodyParser.json());
-
-app.get('/', (req, res) => {
-  res.send('Hello World!');
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
 
   // Proceed with registration
   bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. If you are a recruiter, type /setrecruiter to change your role.`);
@@ -212,3 +202,16 @@ const sendReminders = async () => {
   };
   
   schedule.scheduleJob('0 * * * *', sendReminders); // Run every hour
+
+    // Express app setup
+const app = express();
+app.use(bodyParser.json());
+
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
