@@ -256,6 +256,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
   const [counterpartUsername, description] = match.slice(1);
+  console.log(`Meeting request by @${msg.from.username} for @${counterpartUsername} with description: ${description}`);
 
   try {
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
@@ -263,6 +264,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
     if (!counterpartRef.empty) {
       const counterpart = counterpartRef.docs[0];
       const counterpartId = counterpart.id;
+      console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
       // Store the counterpart and description in Firestore
       await db.collection('meetingRequests').doc(chatId.toString()).set({
@@ -271,6 +273,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         description: description,
         timeSlots: []
       });
+      console.log(`Meeting request stored in Firestore for chat ID: ${chatId}`);
 
       // Ask user to choose date and time slots
       const opts = {
@@ -283,6 +286,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
 
       bot.sendMessage(chatId, 'Please choose up to 5 available time slots for the meeting:', opts);
     } else {
+      console.log(`User @${counterpartUsername} not found.`);
       bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
     }
   } catch (error) {
@@ -297,66 +301,65 @@ bot.on('callback_query', async (callbackQuery) => {
   const chatId = msg.chat.id;
   const data = callbackQuery.data.split('_');
 
-  if (data[0] === 'choose') {
-    const action = data[1];
-    const chatId = data[2];
+  console.log(`Callback query received: ${callbackQuery.data}`);
 
-    if (action === 'timeslots') {
-      // Send a prompt to choose date and time slots
-      const opts = {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Today', callback_data: `choose_date_${chatId}_today` }],
-            [{ text: 'Tomorrow', callback_data: `choose_date_${chatId}_tomorrow` }],
-            [{ text: 'Other', callback_data: `choose_date_${chatId}_other` }]
-          ]
-        }
-      };
+  if (data[0] === 'choose' && data[1] === 'timeslots') {
+    // Handle choosing time slots
+    const opts = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'Today', callback_data: `choose_date_${chatId}_today` }],
+          [{ text: 'Tomorrow', callback_data: `choose_date_${chatId}_tomorrow` }],
+          [{ text: 'Other', callback_data: `choose_date_${chatId}_other` }]
+        ]
+      }
+    };
 
-      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
-    } else if (action === 'date') {
-      const date = data[3];
-      const availableTimes = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+    bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
+  } else if (data[1] === 'date') {
+    const date = data[2];
+    console.log(`Date chosen: ${date}`);
 
-      const opts = {
-        reply_markup: {
-          inline_keyboard: availableTimes.map(time => [
-            { text: time, callback_data: `add_timeslot_${chatId}_${date}_${time}` }
-          ])
-        }
-      };
+    const availableTimes = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+    const opts = {
+      reply_markup: {
+        inline_keyboard: availableTimes.map(time => [
+          { text: time, callback_data: `add_timeslot_${chatId}_${date}_${time}` }
+        ])
+      }
+    };
 
-      bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
-    } else if (action === 'add') {
-      const [date, time] = data.slice(3);
+    bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
+  } else if (data[1] === 'add') {
+    const [date, time] = data.slice(2);
+    console.log(`Time slot chosen: ${date} ${time}`);
 
-      try {
-        const requestRef = db.collection('meetingRequests').doc(chatId.toString());
-        const request = await requestRef.get();
+    try {
+      const requestRef = db.collection('meetingRequests').doc(chatId.toString());
+      const request = await requestRef.get();
 
-        if (request.exists) {
-          const timeSlots = request.data().timeSlots;
+      if (request.exists) {
+        const timeSlots = request.data().timeSlots;
 
-          if (timeSlots.length < 5) {
-            timeSlots.push(`${date} ${time}`);
-            await requestRef.update({ timeSlots });
+        if (timeSlots.length < 5) {
+          timeSlots.push(`${date} ${time}`);
+          await requestRef.update({ timeSlots });
 
-            bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
+          bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
 
-            if (timeSlots.length === 5) {
-              // Proceed to send request to counterpart
-              await sendMeetingRequest(chatId, request.data().counterpartId, timeSlots, request.data().description);
-            }
-          } else {
-            bot.sendMessage(chatId, 'You have already selected 5 time slots.');
+          if (timeSlots.length === 5) {
+            // Proceed to send request to counterpart
+            await sendMeetingRequest(chatId, request.data().counterpartId, timeSlots, request.data().description);
           }
         } else {
-          bot.sendMessage(chatId, 'Meeting request not found.');
+          bot.sendMessage(chatId, 'You have already selected 5 time slots.');
         }
-      } catch (error) {
-        console.error('Error adding time slot:', error);
-        bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
+      } else {
+        bot.sendMessage(chatId, 'Meeting request not found.');
       }
+    } catch (error) {
+      console.error('Error adding time slot:', error);
+      bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
     }
   }
 });
@@ -449,7 +452,6 @@ bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
   }
 });
 
-// Handle button callbacks for commitment acceptance or decline
 // Handle button callbacks for commitment acceptance or decline
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
@@ -654,7 +656,7 @@ bot.onText(/\/subscribe/, async (msg) => {
 const sendReminders = async () => {
   console.log('Sending reminders...');
   const now = new Date();
-  const commitments = await db.collection('commitments').where('status', 'pending').get();
+  const commitments = await db.collection('commitments').where('status', '==', 'pending').get();
 
   commitments.forEach(async (doc) => {
     const commitment = doc.data();
@@ -690,8 +692,6 @@ const sendReminders = async () => {
     }
   });
 };
-
-schedule.scheduleJob('0 * * * *', sendReminders); // Run every hour
 
 schedule.scheduleJob('0 * * * *', sendReminders); // Run every hour
 
