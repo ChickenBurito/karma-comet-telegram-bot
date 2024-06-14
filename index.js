@@ -87,8 +87,8 @@ bot.onText(/\/start/, (msg) => {
   - **/register**: Register yourself as a job seeker using your Telegram username.
   - **/setrecruiter**: Switch your role to a recruiter.
   - **/setjobseeker**: Switch your role back to a job seeker.
-  - **/meeting <YYYY-MM-DD HH:MM> <description>**: Schedule a meeting.
-  - **/feedback <YYYY-MM-DD HH:MM> <description>**: Provide feedback.
+  - **/meeting <YYYY-MM-DD HH:MM> <counterpart_username> <description>**: Schedule a meeting.
+  - **/feedback <YYYY-MM-DD HH:MM> <counterpart_username> <description>**: Provide feedback.
   - **/status**: Update the status of your commitments using easy-to-select buttons.
   - **/subscribe**: Subscribe to premium recruiter services.
   
@@ -217,52 +217,197 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 ////******************////
 
 // Log commitments for meetings
-bot.onText(/\/meeting (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (.+)/, async (msg, match) => {
+bot.onText(/\/meeting (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
-  const [dateTime, description] = match.slice(1);
+  const [dateTime, counterpartUsername, description] = match.slice(1);
 
   try {
-    console.log(`Logging meeting for user ${chatId}: ${description} on ${dateTime}`);
-    const [date, time] = dateTime.split(' ');
-    const docRef = await db.collection('commitments').add({
-      userId: chatId.toString(),
-      date,
-      time,
-      description,
-      type: 'meeting',
-      status: 'pending'
-    });
+    const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
 
-    bot.sendMessage(chatId, `Meeting scheduled: ${description} on ${date} at ${time}. ID: ${docRef.id}`);
+    if (!counterpartRef.empty) {
+      const counterpart = counterpartRef.docs[0];
+      const counterpartId = counterpart.id;
+
+      console.log(`Requesting counterpart ${counterpartId} to accept meeting: ${description} on ${dateTime}`);
+
+      const [date, time] = dateTime.split(' ');
+
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Accept', callback_data: `accept_meeting_${chatId}_${counterpartUsername}_${dateTime}_${description}` },
+              { text: 'Decline', callback_data: `decline_meeting_${chatId}_${counterpartUsername}_${description}` }
+            ]
+          ]
+        }
+      };
+
+      bot.sendMessage(counterpartId, `You have a meeting request from @${msg.from.username}: ${description} on ${date} at ${time}. Do you accept?`, opts);
+    } else {
+      bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
+    }
   } catch (error) {
-    console.error('Error scheduling meeting:', error);
-    bot.sendMessage(chatId, 'There was an error scheduling your meeting. Please try again.');
+    console.error('Error requesting meeting:', error);
+    bot.sendMessage(chatId, 'There was an error sending the meeting request. Please try again.');
   }
 });
 
 // Log commitments for feedback
-bot.onText(/\/feedback (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (.+)/, async (msg, match) => {
+bot.onText(/\/feedback (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) @(\w+) (.+)/, async (msg, match) => {
   console.log('/feedback command received');
   const chatId = msg.chat.id;
-  const [dateTime, description] = match.slice(1);
+  const [dateTime, counterpartUsername, description] = match.slice(1);
 
   try {
-    console.log(`Logging feedback for user ${chatId}: ${description} on ${dateTime}`);
-    const [date, time] = dateTime.split(' ');
-    const docRef = await db.collection('commitments').add({
-      userId: chatId.toString(),
-      date,
-      time,
-      description,
-      type: 'feedback',
-      status: 'pending'
-    });
+    const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
 
-    bot.sendMessage(chatId, `Feedback scheduled: ${description} on ${date} at ${time}. ID: ${docRef.id}`);
+    if (!counterpartRef.empty) {
+      const counterpart = counterpartRef.docs[0];
+      const counterpartId = counterpart.id;
+
+      console.log(`Requesting counterpart ${counterpartId} to accept feedback: ${description} on ${dateTime}`);
+
+      const [date, time] = dateTime.split(' ');
+
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Accept', callback_data: `accept_feedback_${chatId}_${counterpartUsername}_${dateTime}_${description}` },
+              { text: 'Decline', callback_data: `decline_feedback_${chatId}_${counterpartUsername}_${description}` }
+            ]
+          ]
+        }
+      };
+
+      bot.sendMessage(counterpartId, `You have a feedback request from @${msg.from.username}: ${description} on ${date} at ${time}. Do you accept?`, opts);
+    } else {
+      bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
+    }
   } catch (error) {
-    console.error('Error scheduling feedback:', error);
-    bot.sendMessage(chatId, 'There was an error scheduling your feedback. Please try again.');
+    console.error('Error requesting feedback:', error);
+    bot.sendMessage(chatId, 'There was an error sending the feedback request. Please try again.');
+  }
+});
+
+// Handle feedback days command
+bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
+  console.log('/feedbackdays command received');
+  const chatId = msg.chat.id;
+  const [days, commitmentId] = match.slice(1);
+
+  try {
+    const commitmentRef = db.collection('commitments').doc(commitmentId);
+    const commitment = await commitmentRef.get();
+
+    if (commitment.exists) {
+      const counterpartId = commitment.data().counterpartId;
+      const feedbackDueDate = new Date();
+      feedbackDueDate.setDate(feedbackDueDate.getDate() + parseInt(days));
+
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Approve', callback_data: `approve_feedback_${commitmentId}_${feedbackDueDate.toISOString()}` },
+              { text: 'Decline', callback_data: `decline_feedback_${commitmentId}` }
+            ]
+          ]
+        }
+      };
+
+      bot.sendMessage(counterpartId, `You have a feedback request from @${msg.from.username} for the meeting "${commitment.data().description}". Feedback will be provided within ${days} days. Do you approve?`, opts);
+    } else {
+      bot.sendMessage(chatId, 'Commitment not found.');
+    }
+  } catch (error) {
+    console.error('Error handling feedback days:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+  }
+});
+
+// Handle button callbacks for commitment acceptance or decline
+bot.on('callback_query', async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data.split('_');
+
+  const action = data[0];
+  const type = data[1];
+  const counterpartId = data[2];
+  const counterpartUsername = data[3];
+  const dateTime = data[4];
+  const description = data.slice(5).join('_');
+
+  if (action === 'accept' || action === 'decline') {
+    try {
+      const [date, time] = dateTime.split(' ');
+
+      if (action === 'accept') {
+        console.log(`Creating commitment: ${description} on ${date} at ${time} between ${chatId} and ${counterpartId}`);
+
+        await db.collection('commitments').add({
+          userId: counterpartId,
+          counterpartId: chatId,
+          date,
+          time,
+          description,
+          type: type,
+          status: 'pending'
+        });
+
+        bot.sendMessage(chatId, `Your request for ${type} on ${date} at ${time} has been accepted by @${counterpartUsername}.`);
+        bot.sendMessage(counterpartId, `You have accepted the ${type} request from @${msg.from.username} for ${description} on ${date} at ${time}.`);
+      } else if (action === 'decline') {
+        console.log(`Declining commitment: ${description} on ${date} at ${time} by ${chatId}`);
+
+        bot.sendMessage(counterpartId, `Your request for ${type} on ${date} at ${time} was declined by @${msg.from.username}.`);
+        bot.sendMessage(chatId, `Your request for ${type} on ${date} at ${time} was declined by @${counterpartUsername}.`);
+      }
+    } catch (error) {
+      console.error('Error handling callback query:', error);
+      bot.sendMessage(chatId, 'There was an error processing your response. Please try again.');
+    }
+  }
+
+  if (type === 'feedback') {
+    try {
+      const commitmentRef = db.collection('commitments').doc(commitmentId);
+      const commitment = await commitmentRef.get();
+
+      if (commitment.exists) {
+        const feedbackDueDate = new Date(data[3]);
+
+        if (action === 'approve') {
+          console.log(`Creating feedback commitment: ${commitment.data().description} due on ${feedbackDueDate}`);
+
+          await db.collection('commitments').add({
+            userId: commitment.data().userId,
+            counterpartId: commitment.data().counterpartId,
+            date: feedbackDueDate.toISOString().split('T')[0],
+            time: feedbackDueDate.toISOString().split('T')[1].slice(0, 5),
+            description: `Feedback for meeting: ${commitment.data().description}`,
+            type: 'feedback',
+            status: 'pending'
+          });
+
+          bot.sendMessage(commitment.data().userId, `Your feedback request for the meeting "${commitment.data().description}" has been approved by @${msg.from.username}. Feedback is due by ${feedbackDueDate.toDateString()}.`);
+          bot.sendMessage(commitment.data().counterpartId, `You have approved the feedback request for the meeting "${commitment.data().description}". Feedback is due by ${feedbackDueDate.toDateString()}.`);
+        } else if (action === 'decline') {
+          console.log(`Declining feedback commitment: ${commitment.data().description}`);
+
+          bot.sendMessage(commitment.data().userId, `Your feedback request for the meeting "${commitment.data().description}" was declined by @${msg.from.username}.`);
+          bot.sendMessage(commitment.data().counterpartId, `You have declined the feedback request for the meeting "${commitment.data().description}".`);
+        }
+      } else {
+        bot.sendMessage(chatId, 'Commitment not found.');
+      }
+    } catch (error) {
+      console.error('Error handling callback query:', error);
+      bot.sendMessage(chatId, 'There was an error processing your response. Please try again.');
+    }
   }
 });
 
@@ -289,7 +434,7 @@ bot.onText(/\/status (\w+)/, async (msg, match) => {
   bot.sendMessage(chatId, 'Update your commitment status:', opts);
 });
 
-// Handle button callbacks
+// Handle button callbacks for commitment status
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const [action, commitmentId, status] = callbackQuery.data.split('_');
@@ -328,6 +473,11 @@ bot.on('callback_query', async (callbackQuery) => {
             });
 
             bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${expiryDate}.`);
+
+            // Automatically create feedback request after 2 hours
+            setTimeout(async () => {
+              bot.sendMessage(chatId, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>_${commitmentId}`);
+            }, 2 * 60 * 60 * 1000); // 2 hours in milliseconds
           } else {
             bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}.`);
           }
@@ -343,7 +493,7 @@ bot.on('callback_query', async (callbackQuery) => {
 });
 
 ////******************////
-// Subscriptions logic
+// Subscription logic
 ////******************////  
 
 bot.onText(/\/subscribe/, async (msg) => {
@@ -382,7 +532,7 @@ bot.onText(/\/subscribe/, async (msg) => {
 const sendReminders = async () => {
   console.log('Sending reminders...');
   const now = new Date();
-  const commitments = await db.collection('commitments').where('status', '==', 'pending').get();
+  const commitments = await db.collection('commitments').where('status', 'pending').get();
 
   commitments.forEach(async (doc) => {
     const commitment = doc.data();
@@ -390,6 +540,7 @@ const sendReminders = async () => {
 
     if (commitmentDate > now && (commitmentDate - now) <= 24 * 60 * 60 * 1000) { // Reminder 24 hours before
       bot.sendMessage(commitment.userId, `Reminder: You have a commitment "${commitment.description}" on ${commitment.date} at ${commitment.time}.`);
+      bot.sendMessage(commitment.counterpartId, `Reminder: You have a commitment "${commitment.description}" on ${commitment.date} at ${commitment.time}.`);
     }
   });
 };
