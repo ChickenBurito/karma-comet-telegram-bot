@@ -156,7 +156,7 @@ bot.on('callback_query', async (callbackQuery) => {
         userType: 'recruiter',
         recruiterType: 'individual'
       });
-      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. It is time to schedule your first meeting! Type /meeting @username where username is the name of the Job seeker. To subscribe for recruiter premium services type /subscribe. If you want to switch back to Job Seeker role type /setjobseeker');
+      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram name of the Job seeker and {meeting description} is any meeting details. If you want to switch back to Job Seeker role just type /setjobseeker');
     } catch (error) {
       console.error('Error setting recruiter role:', error);
       bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -177,7 +177,7 @@ bot.onText(/\/company (.+)/, async (msg, match) => {
       recruiterType: 'company',
       companyName: companyName
     });
-    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. It is time to schedule your first meeting! Type /meeting @username where username is the name of the Job seeker. To subscribe for recruiter premium services type /subscribe. If you want to switch back to Job Seeker role type /setjobseeker.`);
+    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram name of the Job seeker and {meeting description} is any meeting details. If you want to switch back to Job Seeker role just type /setjobseeker.`);
   } catch (error) {
     console.error('Error setting company recruiter role:', error);
     bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -275,16 +275,24 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       });
       console.log(`Meeting request stored in Firestore for chat ID: ${chatId}`);
 
-      // Ask user to choose date and time slots
+      // Ask user to choose date
+      const dates = [];
+      const now = new Date();
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(now);
+        date.setDate(now.getDate() + i);
+        dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
+      }
+
       const opts = {
         reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Choose Time Slots', callback_data: `choose_timeslots_${chatId}` }]
-          ]
+          inline_keyboard: dates.map(date => [
+            { text: date, callback_data: `choose_date_${chatId}_${date}` }
+          ])
         }
       };
 
-      bot.sendMessage(chatId, 'Please choose up to 5 available time slots for the meeting:', opts);
+      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
     } else {
       console.log(`User @${counterpartUsername} not found.`);
       bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
@@ -303,24 +311,15 @@ bot.on('callback_query', async (callbackQuery) => {
 
   console.log(`Callback query received: ${callbackQuery.data}`);
 
-  if (data[0] === 'choose' && data[1] === 'timeslots') {
-    // Handle choosing time slots
-    const opts = {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'Today', callback_data: `choose_date_${chatId}_today` }],
-          [{ text: 'Tomorrow', callback_data: `choose_date_${chatId}_tomorrow` }],
-          [{ text: 'Other', callback_data: `choose_date_${chatId}_other` }]
-        ]
-      }
-    };
-
-    bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
-  } else if (data[1] === 'date') {
+  if (data[0] === 'choose' && data[1] === 'date') {
     const date = data[2];
     console.log(`Date chosen: ${date}`);
 
-    const availableTimes = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+    const availableTimes = [];
+    for (let hour = 9; hour <= 19; hour++) {
+      availableTimes.push(`${hour}:00`, `${hour}:30`);
+    }
+
     const opts = {
       reply_markup: {
         inline_keyboard: availableTimes.map(time => [
@@ -330,7 +329,7 @@ bot.on('callback_query', async (callbackQuery) => {
     };
 
     bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
-  } else if (data[1] === 'add') {
+  } else if (data[0] === 'add' && data[1] === 'timeslot') {
     const [date, time] = data.slice(2);
     console.log(`Time slot chosen: ${date} ${time}`);
 
