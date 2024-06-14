@@ -58,11 +58,49 @@ const bot = new TelegramBot(token, {
 
 console.log('Bot is starting...');
 
-bot.onText(/\/start/, (msg) => {
-  console.log('/start command received');
-  bot.sendMessage(msg.chat.id, "Welcome to the KarmaComet Bot! Type /register to get started.");
+// Log every message received
+bot.on('message', (msg) => {
+  console.log(`Message received: ${msg.text}`);
 });
 
+// Handle /start command
+bot.onText(/\/start/, (msg) => {
+  console.log('/start command received');
+  const chatId = msg.chat.id;
+  const userName = msg.from.username || 'there';
+
+  const greeting = `Hi ${userName}!`;
+  const description = `
+ Hi, I am KarmaComet Bot!
+
+ The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. I ensure that all parties stay true to their commitments, helping everyone save time and money.
+  
+  🌟 Key Features:
+  - **Accountability**: Ensures both job seekers and recruiters keep their promises.
+  - **Commitment Tracking**: Log and track all your commitments with precise dates, times, and descriptions.
+  - **Automated Reminders**: Never forget a meeting or interview with our timely reminders.
+  - **Feedback Enforcement**: Pushes recruiters and Job seekers to share timely feedback, improving transparency and trust.
+  - **Score System**: Track your reliability with a scoring system based on your commitment fulfillment.
+  - **Subscription Services**: Recruiters can subscribe for advanced features and management tools.
+  
+  📋 User Guide:
+  - **/register <your_name>**: Register yourself as a job seeker or recruiter.
+  - **/setrecruiter**: Switch your role to a recruiter.
+  - **/setjobseeker**: Switch your role back to a job seeker.
+  - **/commit <YYYY-MM-DD HH:MM> <description>**: Log a new commitment with the specified date, time, and description.
+  - **/status**: Update the status of your commitments using easy-to-select buttons.
+  - **/subscribe**: Subscribe to premium recruiter services.
+  
+  KarmaComet Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!
+  
+  Type /register <your_name> to get started.`;
+
+  bot.sendMessage(chatId, greeting);
+  bot.sendMessage(chatId, description);
+  bot.sendMessage(chatId, "Type /register <your_name> to get started.");
+});
+
+// Handle /register command 
 bot.onText(/\/register (.+)/, async (msg, match) => {
   console.log('/register command received');
   const chatId = msg.chat.id;
@@ -88,6 +126,7 @@ bot.onText(/\/register (.+)/, async (msg, match) => {
   }
 });
 
+// Handle /setrecruiter command
 bot.onText(/\/setrecruiter/, async (msg) => {
   console.log('/setrecruiter command received');
   const chatId = msg.chat.id;
@@ -104,18 +143,46 @@ bot.onText(/\/setrecruiter/, async (msg) => {
   }
 });
 
+// Handle /setjobseeker command
+bot.onText(/\/setjobseeker/, async (msg) => {
+  console.log('/setjobseeker command received');
+  const chatId = msg.chat.id;
+
+  try {
+    const userRef = db.collection('users').doc(chatId.toString());
+    const user = await userRef.get();
+
+    if (user.exists) {
+      if (user.data().userType === 'jobSeeker') {
+        bot.sendMessage(chatId, "You are already a job seeker.");
+      } else {
+        await userRef.update({
+          userType: 'jobSeeker'
+        });
+
+        bot.sendMessage(chatId, "Your role has been updated to job seeker. Your subscription status remains unchanged.");
+      }
+    } else {
+      bot.sendMessage(chatId, "User not found. Please register first using /register <your_name>.");
+    }
+  } catch (error) {
+    console.error('Error setting job seeker role:', error);
+    bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
+  }
+});
+
 ////******************////
 // Log commitments
 ////******************////
 
-bot.onText(/\/commit (.+)/, async (msg, match) => {
+bot.onText(/\/commit (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (.+)/, async (msg, match) => {
   console.log('/commit command received');
   const chatId = msg.chat.id;
-  const [date, time, ...descArray] = match[1].split(' ');
-  const description = descArray.join(' ');
-  
+  const [dateTime, description] = match.slice(1);
+
   try {
-    console.log(`Logging commitment for user ${chatId}: ${description} on ${date} at ${time}`);
+    console.log(`Logging commitment for user ${chatId}: ${description} on ${dateTime}`);
+    const [date, time] = dateTime.split(' ');
     const docRef = await db.collection('commitments').add({
       userId: chatId.toString(),
       date,
@@ -135,52 +202,75 @@ bot.onText(/\/commit (.+)/, async (msg, match) => {
 // Commitment status updates and scoring logic
 ////******************////
 
-bot.onText(/\/status (.+)/, async (msg, match) => {
+bot.onText(/\/status (\w+)/, async (msg, match) => {
   console.log('/status command received');
   const chatId = msg.chat.id;
-  const [commitmentId, status] = match[1].split(' ');
+  const commitmentId = match[1];
 
-  try {
-    console.log(`Updating status for commitment ${commitmentId} to ${status}`);
-    const commitmentRef = db.collection('commitments').doc(commitmentId);
-    const commitment = await commitmentRef.get();
-
-    if (commitment.exists) {
-      await commitmentRef.update({ status });
-
-      const userRef = db.collection('users').doc(chatId.toString());
-      const user = await userRef.get();
-
-      if (user.exists) {
-        let newScore = user.data().score;
-        if (status === 'attended') newScore += 10;
-        else if (status === 'missed') newScore -= 10;
-
-        await userRef.update({ score: newScore });
-
-        // Check for recruiter and update subscription status
-        if (user.data().userType === 'recruiter' && status === 'attended' && user.data().subscription.status === 'free') {
-          const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + 7);
-
-          await userRef.update({
-            subscription: {
-              status: 'trial',
-              expiry: expiryDate
-            }
-          });
-
-          bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${expiryDate}.`);
-        } else {
-          bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}.`);
-        }
-      }
-    } else {
-      bot.sendMessage(chatId, 'Commitment not found.');
+  const opts = {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: 'Attended', callback_data: `status_${commitmentId}_attended` },
+          { text: 'Missed', callback_data: `status_${commitmentId}_missed` }
+        ]
+      ]
     }
-  } catch (error) {
-    console.error('Error updating status:', error);
-    bot.sendMessage(chatId, 'There was an error updating the status. Please try again.');
+  };
+
+  bot.sendMessage(chatId, 'Update your commitment status:', opts);
+});
+
+// Handle button callbacks
+bot.on('callback_query', async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const [action, commitmentId, status] = callbackQuery.data.split('_');
+
+  if (action === 'status') {
+    const chatId = msg.chat.id;
+
+    try {
+      console.log(`Updating status for commitment ${commitmentId} to ${status}`);
+      const commitmentRef = db.collection('commitments').doc(commitmentId);
+      const commitment = await commitmentRef.get();
+
+      if (commitment.exists) {
+        await commitmentRef.update({ status });
+
+        const userRef = db.collection('users').doc(chatId.toString());
+        const user = await userRef.get();
+
+        if (user.exists) {
+          let newScore = user.data().score;
+          if (status === 'attended') newScore += 10;
+          else if (status === 'missed') newScore -= 10;
+
+          await userRef.update({ score: newScore });
+
+          // Check for recruiter and update subscription status
+          if (user.data().userType === 'recruiter' && status === 'attended' && user.data().subscription.status === 'free') {
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 7);
+
+            await userRef.update({
+              subscription: {
+                status: 'trial',
+                expiry: expiryDate
+              }
+            });
+
+            bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${expiryDate}.`);
+          } else {
+            bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}.`);
+          }
+        }
+      } else {
+        bot.sendMessage(chatId, 'Commitment not found.');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      bot.sendMessage(chatId, 'There was an error updating the status. Please try again.');
+    }
   }
 });
 
@@ -243,7 +333,7 @@ const app = express();
 app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
-  res.send('Hello World!');
+  res.send('Yay! KarmaComet is up and running!');
 });
 
 const PORT = process.env.PORT || 3000;
