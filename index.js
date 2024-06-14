@@ -660,12 +660,38 @@ const sendReminders = async () => {
     const commitment = doc.data();
     const commitmentDate = new Date(`${commitment.date} ${commitment.time}`);
 
-    if (commitmentDate > now && (commitmentDate - now) <= 24 * 60 * 60 * 1000) { // Reminder 24 hours before
+    // Reminder 24 hours before
+    if (commitmentDate > now && (commitmentDate - now) <= 24 * 60 * 60 * 1000) {
       bot.sendMessage(commitment.userId, `Reminder: You have a commitment "${commitment.description}" on ${commitment.date} at ${commitment.time}.`);
       bot.sendMessage(commitment.counterpartId, `Reminder: You have a commitment "${commitment.description}" on ${commitment.date} at ${commitment.time}.`);
     }
+
+    // Reminder 1 hour before
+    if (commitmentDate > now && (commitmentDate - now) <= 1 * 60 * 60 * 1000) {
+      bot.sendMessage(commitment.userId, `Reminder: Your commitment "${commitment.description}" is happening in 1 hour at ${commitment.time}.`);
+      bot.sendMessage(commitment.counterpartId, `Reminder: Your commitment "${commitment.description}" is happening in 1 hour at ${commitment.time}.`);
+    }
+
+    // Additional reminders for feedback commitments
+    if (commitment.type === 'feedback') {
+      const feedbackDueDate = new Date(commitment.date);
+
+      // Reminder 24 hours before feedback due
+      if (feedbackDueDate > now && (feedbackDueDate - now) <= 24 * 60 * 60 * 1000) {
+        bot.sendMessage(commitment.userId, `Reminder: Your feedback for "${commitment.description}" is due on ${commitment.date}.`);
+        bot.sendMessage(commitment.counterpartId, `Reminder: Feedback for "${commitment.description}" is due on ${commitment.date}.`);
+      }
+
+      // Reminder 1 hour before feedback due
+      if (feedbackDueDate > now && (feedbackDueDate - now) <= 1 * 60 * 60 * 1000) {
+        bot.sendMessage(commitment.userId, `Reminder: Your feedback for "${commitment.description}" is due in 1 hour at ${commitment.time}.`);
+        bot.sendMessage(commitment.counterpartId, `Reminder: Feedback for "${commitment.description}" is due in 1 hour at ${commitment.time}.`);
+      }
+    }
   });
 };
+
+schedule.scheduleJob('0 * * * *', sendReminders); // Run every hour
 
 schedule.scheduleJob('0 * * * *', sendReminders); // Run every hour
 
