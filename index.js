@@ -156,7 +156,7 @@ bot.on('callback_query', async (callbackQuery) => {
         userType: 'recruiter',
         recruiterType: 'individual'
       });
-      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. Type /subscribe to subscribe for recruiter premium services. If you want to switch back to Job Seeker role type /setjobseeker');
+      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. It is time to schedule your first meeting! Type /meeting @username where username is the name of the Job seeker. To subscribe for recruiter premium services type /subscribe. If you want to switch back to Job Seeker role type /setjobseeker');
     } catch (error) {
       console.error('Error setting recruiter role:', error);
       bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -177,7 +177,7 @@ bot.onText(/\/company (.+)/, async (msg, match) => {
       recruiterType: 'company',
       companyName: companyName
     });
-    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. Type /subscribe to subscribe for recruiter premium services. If you want to switch back to Job Seeker role type /setjobseeker.`);
+    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. It is time to schedule your first meeting! Type /meeting @username where username is the name of the Job seeker. To subscribe for recruiter premium services type /subscribe. If you want to switch back to Job Seeker role type /setjobseeker.`);
   } catch (error) {
     console.error('Error setting company recruiter role:', error);
     bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -213,7 +213,7 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 });
 
 // List of authorized user IDs or usernames for testing commands
-const authorizedUsers = ['klngnv']; // Add your username or user ID here
+const authorizedUsers = ['klngnv','kriskolgan']; // Add your username or user ID here
 
 // Handle /reset command for testing purposes
 bot.onText(/\/reset/, async (msg) => {
