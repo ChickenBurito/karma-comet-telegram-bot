@@ -71,7 +71,7 @@ bot.onText(/\/start/, (msg) => {
 
   const greeting = `Hi ${userName}!`;
   const description = `
- Hi, I am KarmaComet Bot!
+ I am KarmaComet Bot!
 
  The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. I ensure that all parties stay true to their commitments, helping everyone save time and money.
   
@@ -84,27 +84,26 @@ bot.onText(/\/start/, (msg) => {
   - **Subscription Services**: Recruiters can subscribe for advanced features and management tools.
   
   📋 User Guide:
-  - **/register <your_name>**: Register yourself as a job seeker or recruiter.
+  - **/register**: Register yourself as a job seeker using your Telegram username.
   - **/setrecruiter**: Switch your role to a recruiter.
   - **/setjobseeker**: Switch your role back to a job seeker.
-  - **/commit <YYYY-MM-DD HH:MM> <description>**: Log a new commitment with the specified date, time, and description.
+  - **/meeting <YYYY-MM-DD HH:MM> <description>**: Schedule a meeting.
+  - **/feedback <YYYY-MM-DD HH:MM> <description>**: Provide feedback.
   - **/status**: Update the status of your commitments using easy-to-select buttons.
   - **/subscribe**: Subscribe to premium recruiter services.
   
-  KarmaComet Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!
-  
-  Type /register <your_name> to get started.`;
+  KarmaComet Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!`;
 
   bot.sendMessage(chatId, greeting);
   bot.sendMessage(chatId, description);
   bot.sendMessage(chatId, "Type /register <your_name> to get started.");
 });
 
-// Handle /register command 
-bot.onText(/\/register (.+)/, async (msg, match) => {
+/// Handle /register command with telegram username
+bot.onText(/\/register/, async (msg) => {
   console.log('/register command received');
   const chatId = msg.chat.id;
-  const userName = match[1];
+  const userName = msg.from.username || 'User';
 
   try {
     console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
@@ -119,7 +118,7 @@ bot.onText(/\/register (.+)/, async (msg, match) => {
     });
     console.log(`User ${userName} registered successfully.`);
 
-    bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. If you are a recruiter, type /setrecruiter to change your role.`);
+    bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. You can change your role to recruiter if needed using /setrecruiter. You are all set! You can now schedule a meeting or wait for incoming requests.`);
   } catch (error) {
     console.error('Error registering user:', error);
     bot.sendMessage(chatId, 'There was an error processing your registration. Please try again.');
@@ -131,14 +130,56 @@ bot.onText(/\/setrecruiter/, async (msg) => {
   console.log('/setrecruiter command received');
   const chatId = msg.chat.id;
 
+  const opts = {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: 'Individual', callback_data: 'recruiter_individual' },
+          { text: 'Company', callback_data: 'recruiter_company' }
+        ]
+      ]
+    }
+  };
+
+  bot.sendMessage(chatId, 'Are you an individual recruiter or registering as a company?', opts);
+});
+
+// Handle callback query for recruiter type
+bot.on('callback_query', async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data;
+
+  if (data === 'recruiter_individual') {
+    try {
+      await db.collection('users').doc(chatId.toString()).update({
+        userType: 'recruiter',
+        recruiterType: 'individual'
+      });
+      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. Please type /subscribe to subscribe for recruiter services.');
+    } catch (error) {
+      console.error('Error setting recruiter role:', error);
+      bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
+    }
+  } else if (data === 'recruiter_company') {
+    bot.sendMessage(chatId, 'Please enter your company name using the format: /company <company_name>');
+  }
+});
+
+// Handle company name input
+bot.onText(/\/company (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const companyName = match[1];
+
   try {
     await db.collection('users').doc(chatId.toString()).update({
-      userType: 'recruiter'
+      userType: 'recruiter',
+      recruiterType: 'company',
+      companyName: companyName
     });
-
-    bot.sendMessage(chatId, "Your role has been updated to recruiter. Please type /subscribe to subscribe for recruiter services.");
+    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. Please type /subscribe to subscribe for recruiter services.`);
   } catch (error) {
-    console.error('Error setting recruiter role:', error);
+    console.error('Error setting company recruiter role:', error);
     bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
   }
 });
@@ -175,26 +216,53 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 // Log commitments
 ////******************////
 
-bot.onText(/\/commit (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (.+)/, async (msg, match) => {
-  console.log('/commit command received');
+// Log commitments for meetings
+bot.onText(/\/meeting (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (.+)/, async (msg, match) => {
+  console.log('/meeting command received');
   const chatId = msg.chat.id;
   const [dateTime, description] = match.slice(1);
 
   try {
-    console.log(`Logging commitment for user ${chatId}: ${description} on ${dateTime}`);
+    console.log(`Logging meeting for user ${chatId}: ${description} on ${dateTime}`);
     const [date, time] = dateTime.split(' ');
     const docRef = await db.collection('commitments').add({
       userId: chatId.toString(),
       date,
       time,
       description,
+      type: 'meeting',
       status: 'pending'
     });
 
-    bot.sendMessage(chatId, `Commitment logged: ${description} on ${date} at ${time}. ID: ${docRef.id}`);
+    bot.sendMessage(chatId, `Meeting scheduled: ${description} on ${date} at ${time}. ID: ${docRef.id}`);
   } catch (error) {
-    console.error('Error logging commitment:', error);
-    bot.sendMessage(chatId, 'There was an error logging your commitment. Please try again.');
+    console.error('Error scheduling meeting:', error);
+    bot.sendMessage(chatId, 'There was an error scheduling your meeting. Please try again.');
+  }
+});
+
+// Log commitments for feedback
+bot.onText(/\/feedback (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (.+)/, async (msg, match) => {
+  console.log('/feedback command received');
+  const chatId = msg.chat.id;
+  const [dateTime, description] = match.slice(1);
+
+  try {
+    console.log(`Logging feedback for user ${chatId}: ${description} on ${dateTime}`);
+    const [date, time] = dateTime.split(' ');
+    const docRef = await db.collection('commitments').add({
+      userId: chatId.toString(),
+      date,
+      time,
+      description,
+      type: 'feedback',
+      status: 'pending'
+    });
+
+    bot.sendMessage(chatId, `Feedback scheduled: ${description} on ${date} at ${time}. ID: ${docRef.id}`);
+  } catch (error) {
+    console.error('Error scheduling feedback:', error);
+    bot.sendMessage(chatId, 'There was an error scheduling your feedback. Please try again.');
   }
 });
 
