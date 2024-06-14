@@ -216,11 +216,11 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 // Log commitments
 ////******************////
 
-// Log commitments for meetings
-bot.onText(/\/meeting (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) @(\w+) (.+)/, async (msg, match) => {
+// Handle /meeting command
+bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
-  const [dateTime, counterpartUsername, description] = match.slice(1);
+  const [counterpartUsername, description] = match.slice(1);
 
   try {
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
@@ -229,30 +229,116 @@ bot.onText(/\/meeting (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) @(\w+) (.+)/, async (msg, 
       const counterpart = counterpartRef.docs[0];
       const counterpartId = counterpart.id;
 
-      console.log(`Requesting counterpart ${counterpartId} to accept meeting: ${description} on ${dateTime}`);
+      // Store the counterpart and description in Firestore
+      await db.collection('meetingRequests').doc(chatId.toString()).set({
+        counterpartId: counterpartId,
+        counterpartUsername: counterpartUsername,
+        description: description,
+        timeSlots: []
+      });
 
-      const [date, time] = dateTime.split(' ');
-
+      // Ask user to choose date and time slots
       const opts = {
         reply_markup: {
           inline_keyboard: [
-            [
-              { text: 'Accept', callback_data: `accept_meeting_${chatId}_${counterpartUsername}_${dateTime}_${description}` },
-              { text: 'Decline', callback_data: `decline_meeting_${chatId}_${counterpartUsername}_${description}` }
-            ]
+            [{ text: 'Choose Time Slots', callback_data: `choose_timeslots_${chatId}` }]
           ]
         }
       };
 
-      bot.sendMessage(counterpartId, `You have a meeting request from @${msg.from.username}: ${description} on ${date} at ${time}. Do you accept?`, opts);
+      bot.sendMessage(chatId, 'Please choose up to 5 available time slots for the meeting:', opts);
     } else {
       bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
     }
   } catch (error) {
-    console.error('Error requesting meeting:', error);
-    bot.sendMessage(chatId, 'There was an error sending the meeting request. Please try again.');
+    console.error('Error handling /meeting command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
+
+// Handle callback for choosing time slots
+bot.on('callback_query', async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data.split('_');
+
+  if (data[0] === 'choose') {
+    const action = data[1];
+    const chatId = data[2];
+
+    if (action === 'timeslots') {
+      // Send a prompt to choose date and time slots
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Today', callback_data: `choose_date_${chatId}_today` }],
+            [{ text: 'Tomorrow', callback_data: `choose_date_${chatId}_tomorrow` }],
+            [{ text: 'Other', callback_data: `choose_date_${chatId}_other` }]
+          ]
+        }
+      };
+
+      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
+    } else if (action === 'date') {
+      const date = data[3];
+      const availableTimes = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+
+      const opts = {
+        reply_markup: {
+          inline_keyboard: availableTimes.map(time => [
+            { text: time, callback_data: `add_timeslot_${chatId}_${date}_${time}` }
+          ])
+        }
+      };
+
+      bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
+    } else if (action === 'add') {
+      const [date, time] = data.slice(3);
+
+      try {
+        const requestRef = db.collection('meetingRequests').doc(chatId.toString());
+        const request = await requestRef.get();
+
+        if (request.exists) {
+          const timeSlots = request.data().timeSlots;
+
+          if (timeSlots.length < 5) {
+            timeSlots.push(`${date} ${time}`);
+            await requestRef.update({ timeSlots });
+
+            bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
+
+            if (timeSlots.length === 5) {
+              // Proceed to send request to counterpart
+              await sendMeetingRequest(chatId, request.data().counterpartId, timeSlots, request.data().description);
+            }
+          } else {
+            bot.sendMessage(chatId, 'You have already selected 5 time slots.');
+          }
+        } else {
+          bot.sendMessage(chatId, 'Meeting request not found.');
+        }
+      } catch (error) {
+        console.error('Error adding time slot:', error);
+        bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
+      }
+    }
+  }
+});
+
+// Function to send meeting request to counterpart
+const sendMeetingRequest = async (chatId, counterpartId, timeSlots, description) => {
+  const opts = {
+    reply_markup: {
+      inline_keyboard: timeSlots.map(slot => [
+        { text: slot, callback_data: `accept_meeting_${chatId}_${slot}_${description}` }
+      ])
+    }
+  };
+
+  await bot.sendMessage(counterpartId, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, opts);
+  await bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
+};
 
 // Log commitments for feedback
 bot.onText(/\/feedback (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) @(\w+) (.+)/, async (msg, match) => {
@@ -329,6 +415,7 @@ bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
 });
 
 // Handle button callbacks for commitment acceptance or decline
+// Handle button callbacks for commitment acceptance or decline
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
@@ -341,35 +428,35 @@ bot.on('callback_query', async (callbackQuery) => {
   const dateTime = data[4];
   const description = data.slice(5).join('_');
 
-  if (action === 'accept' || action === 'decline') {
+  if (type === 'meeting' && action === 'accept') {
     try {
       const [date, time] = dateTime.split(' ');
 
-      if (action === 'accept') {
-        console.log(`Creating commitment: ${description} on ${date} at ${time} between ${chatId} and ${counterpartId}`);
+      console.log(`Creating commitment: ${description} on ${date} at ${time} between ${chatId} and ${counterpartId}`);
 
-        await db.collection('commitments').add({
-          userId: counterpartId,
-          counterpartId: chatId,
-          date,
-          time,
-          description,
-          type: type,
-          status: 'pending'
-        });
+      await db.collection('commitments').add({
+        userId: counterpartId,
+        counterpartId: chatId,
+        date,
+        time,
+        description,
+        type: type,
+        status: 'pending'
+      });
 
-        bot.sendMessage(chatId, `Your request for ${type} on ${date} at ${time} has been accepted by @${counterpartUsername}.`);
-        bot.sendMessage(counterpartId, `You have accepted the ${type} request from @${msg.from.username} for ${description} on ${date} at ${time}.`);
-      } else if (action === 'decline') {
-        console.log(`Declining commitment: ${description} on ${date} at ${time} by ${chatId}`);
-
-        bot.sendMessage(counterpartId, `Your request for ${type} on ${date} at ${time} was declined by @${msg.from.username}.`);
-        bot.sendMessage(chatId, `Your request for ${type} on ${date} at ${time} was declined by @${counterpartUsername}.`);
-      }
+      bot.sendMessage(chatId, `Your request for a meeting on ${date} at ${time} has been accepted by @${counterpartUsername}.`);
+      bot.sendMessage(counterpartId, `You have accepted the meeting request from @${msg.from.username} for ${description} on ${date} at ${time}.`);
     } catch (error) {
       console.error('Error handling callback query:', error);
       bot.sendMessage(chatId, 'There was an error processing your response. Please try again.');
     }
+  }
+
+  if (action === 'decline') {
+    console.log(`Declining commitment: ${description} on ${dateTime} by ${chatId}`);
+
+    bot.sendMessage(counterpartId, `Your request for ${type} on ${dateTime} was declined by @${msg.from.username}.`);
+    bot.sendMessage(chatId, `Your request for ${type} on ${dateTime} was declined by @${counterpartUsername}.`);
   }
 
   if (type === 'feedback') {
