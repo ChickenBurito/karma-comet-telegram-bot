@@ -87,8 +87,8 @@ bot.onText(/\/start/, (msg) => {
   - **/register**: Register yourself as a job seeker using your Telegram username.
   - **/setrecruiter**: Switch your role to a recruiter.
   - **/setjobseeker**: Switch your role back to a job seeker.
-  - **/meeting <YYYY-MM-DD HH:MM> <counterpart_username> <description>**: Schedule a meeting.
-  - **/feedback <YYYY-MM-DD HH:MM> <counterpart_username> <description>**: Provide feedback.
+  - **/meeting @username description**: Schedule a meeting.
+  - **/feedback @username description**: Provide feedback.
   - **/status**: Update the status of your commitments using easy-to-select buttons.
   - **/subscribe**: Subscribe to premium recruiter services.
   
@@ -96,7 +96,7 @@ bot.onText(/\/start/, (msg) => {
 
   bot.sendMessage(chatId, greeting);
   bot.sendMessage(chatId, description);
-  bot.sendMessage(chatId, "Type /register <your_name> to get started.");
+  bot.sendMessage(chatId, "Type /register to get started.");
 });
 
 /// Handle /register command with telegram username
@@ -156,7 +156,7 @@ bot.on('callback_query', async (callbackQuery) => {
         userType: 'recruiter',
         recruiterType: 'individual'
       });
-      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. Please type /subscribe to subscribe for recruiter services.');
+      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. Type /subscribe to subscribe for recruiter premium services. If you want to switch back to Job Seeker role type /setjobseeker');
     } catch (error) {
       console.error('Error setting recruiter role:', error);
       bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -177,7 +177,7 @@ bot.onText(/\/company (.+)/, async (msg, match) => {
       recruiterType: 'company',
       companyName: companyName
     });
-    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. Please type /subscribe to subscribe for recruiter services.`);
+    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. Type /subscribe to subscribe for recruiter premium services. If you want to switch back to Job Seeker role type /setjobseeker.`);
   } catch (error) {
     console.error('Error setting company recruiter role:', error);
     bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -201,7 +201,7 @@ bot.onText(/\/setjobseeker/, async (msg) => {
           userType: 'jobSeeker'
         });
 
-        bot.sendMessage(chatId, "Your role has been updated to job seeker. Your subscription status remains unchanged.");
+        bot.sendMessage(chatId, "Your role has been updated to job seeker. Your recruiter subscription status remains unchanged.");
       }
     } else {
       bot.sendMessage(chatId, "User not found. Please register first using /register <your_name>.");
@@ -209,6 +209,41 @@ bot.onText(/\/setjobseeker/, async (msg) => {
   } catch (error) {
     console.error('Error setting job seeker role:', error);
     bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
+  }
+});
+
+// List of authorized user IDs or usernames for testing commands
+const authorizedUsers = ['klngnv']; // Add your username or user ID here
+
+// Handle /reset command for testing purposes
+bot.onText(/\/reset/, async (msg) => {
+  console.log('/reset command received');
+  const chatId = msg.chat.id;
+  const userName = msg.from.username || 'User';
+
+  // Check if the user is authorized
+  if (!authorizedUsers.includes(userName)) {
+    bot.sendMessage(chatId, 'You are not authorized to use this command.');
+    return;
+  }
+
+  try {
+    console.log(`Resetting user: ${userName} with chat ID: ${chatId}`);
+    await db.collection('users').doc(chatId.toString()).set({
+      name: userName,
+      score: 0,
+      userType: 'jobSeeker', // Reset to default user type
+      subscription: {
+        status: 'free',
+        expiry: null
+      }
+    });
+    console.log(`User ${userName} reset successfully.`);
+
+    bot.sendMessage(chatId, `Your status has been reset. You are now a job seeker with a free subscription. You can change your role to recruiter if needed using /setrecruiter.`);
+  } catch (error) {
+    console.error('Error resetting user:', error);
+    bot.sendMessage(chatId, 'There was an error processing your reset request. Please try again.');
   }
 });
 
