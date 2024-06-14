@@ -267,7 +267,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
       // Generate a unique meeting ID
-      const meetingId = `${chatId}_${Date.now()}`;
+      const meetingId = `meeting_${Date.now()}`;
 
       // Store the counterpart and description in Firestore
       await db.collection('meetingRequests').doc(meetingId).set({
@@ -353,16 +353,17 @@ bot.on('callback_query', async (callbackQuery) => {
 
           bot.sendMessage(chatId, `Added time slot: ${time}`);
 
-          if (timeSlots.length === 5) {
+          if (timeSlots.length > 0) {
             // Ask user if they want to create the meeting request
             const opts = {
               reply_markup: {
                 inline_keyboard: [
-                  [{ text: 'Create Meeting Request', callback_data: `create_meeting_${meetingId}` }]
+                  [{ text: 'Create Meeting Request', callback_data: `create_meeting_${meetingId}` }],
+                  [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingId}` }]
                 ]
               }
             };
-            bot.sendMessage(chatId, 'You have selected 5 time slots. Do you want to create the meeting request?', opts);
+            bot.sendMessage(chatId, 'Do you want to create the meeting request now?', opts);
           }
         } else {
           bot.sendMessage(chatId, 'You have already selected 5 time slots.');
@@ -394,6 +395,16 @@ bot.on('callback_query', async (callbackQuery) => {
     } catch (error) {
       console.error('Error creating meeting request:', error);
       bot.sendMessage(chatId, 'There was an error creating the meeting request. Please try again.');
+    }
+  } else if (data[0] === 'cancel' && data[1] === 'meeting') {
+    const meetingId = data[2];
+
+    try {
+      await db.collection('meetingRequests').doc(meetingId).delete();
+      bot.sendMessage(chatId, 'Meeting request cancelled.');
+    } catch (error) {
+      console.error('Error cancelling meeting request:', error);
+      bot.sendMessage(chatId, 'There was an error cancelling the meeting request. Please try again.');
     }
   }
 });
