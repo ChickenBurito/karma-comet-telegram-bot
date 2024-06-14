@@ -266,19 +266,24 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const counterpartId = counterpart.id;
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
+      // Generate a unique meeting ID
+      const meetingId = `${chatId}_${Date.now()}`;
+
       // Store the counterpart and description in Firestore
-      await db.collection('meetingRequests').doc(chatId.toString()).set({
+      await db.collection('meetingRequests').doc(meetingId).set({
+        meetingId: meetingId,
+        initiatorId: chatId,
         counterpartId: counterpartId,
         counterpartUsername: counterpartUsername,
         description: description,
         timeSlots: []
       });
-      console.log(`Meeting request stored in Firestore for chat ID: ${chatId}`);
+      console.log(`Meeting request stored in Firestore for meeting ID: ${meetingId}`);
 
       // Ask user to choose date
       const dates = [];
       const now = new Date();
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 14; i++) {
         const date = new Date(now);
         date.setDate(now.getDate() + i);
         dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
@@ -287,7 +292,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const opts = {
         reply_markup: {
           inline_keyboard: dates.map(date => [
-            { text: date, callback_data: `choose_date_${chatId}_${date}` }
+            { text: date, callback_data: `choose_date_${meetingId}_${date}` }
           ])
         }
       };
@@ -312,43 +317,52 @@ bot.on('callback_query', async (callbackQuery) => {
   console.log(`Callback query received: ${callbackQuery.data}`);
 
   if (data[0] === 'choose' && data[1] === 'date') {
-    const date = data[2];
+    const meetingId = data[2];
+    const date = data[3];
     console.log(`Date chosen: ${date}`);
 
     const availableTimes = [];
     for (let hour = 9; hour <= 19; hour++) {
-      availableTimes.push(`${hour}:00`, `${hour}:30`);
+      availableTimes.push(`${date} ${hour}:00`, `${date} ${hour}:30`);
     }
 
     const opts = {
       reply_markup: {
         inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_${chatId}_${date}_${time}` }
+          { text: time, callback_data: `add_timeslot_${meetingId}_${time}` }
         ])
       }
     };
 
     bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
-    const [date, time] = data.slice(2);
-    console.log(`Time slot chosen: ${date} ${time}`);
+    const meetingId = data[2];
+    const time = data.slice(3).join('_');
+    console.log(`Time slot chosen: ${time}`);
 
     try {
-      const requestRef = db.collection('meetingRequests').doc(chatId.toString());
+      const requestRef = db.collection('meetingRequests').doc(meetingId);
       const request = await requestRef.get();
 
       if (request.exists) {
         const timeSlots = request.data().timeSlots;
 
         if (timeSlots.length < 5) {
-          timeSlots.push(`${date} ${time}`);
+          timeSlots.push(time);
           await requestRef.update({ timeSlots });
 
-          bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
+          bot.sendMessage(chatId, `Added time slot: ${time}`);
 
           if (timeSlots.length === 5) {
-            // Proceed to send request to counterpart
-            await sendMeetingRequest(chatId, request.data().counterpartId, timeSlots, request.data().description);
+            // Ask user if they want to create the meeting request
+            const opts = {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: 'Create Meeting Request', callback_data: `create_meeting_${meetingId}` }]
+                ]
+              }
+            };
+            bot.sendMessage(chatId, 'You have selected 5 time slots. Do you want to create the meeting request?', opts);
           }
         } else {
           bot.sendMessage(chatId, 'You have already selected 5 time slots.');
@@ -360,21 +374,41 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error adding time slot:', error);
       bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
     }
+  } else if (data[0] === 'create' && data[1] === 'meeting') {
+    const meetingId = data[2];
+
+    try {
+      const requestRef = db.collection('meetingRequests').doc(meetingId);
+      const request = await requestRef.get();
+
+      if (request.exists) {
+        const { initiatorId, counterpartId, timeSlots, description } = request.data();
+
+        // Send meeting request to counterpart
+        await sendMeetingRequest(initiatorId, counterpartId, timeSlots, description);
+
+        bot.sendMessage(initiatorId, 'Meeting request sent to the counterpart.');
+      } else {
+        bot.sendMessage(chatId, 'Meeting request not found.');
+      }
+    } catch (error) {
+      console.error('Error creating meeting request:', error);
+      bot.sendMessage(chatId, 'There was an error creating the meeting request. Please try again.');
+    }
   }
 });
 
 // Function to send meeting request to counterpart
-const sendMeetingRequest = async (chatId, counterpartId, timeSlots, description) => {
+const sendMeetingRequest = async (initiatorId, counterpartId, timeSlots, description) => {
   const opts = {
     reply_markup: {
       inline_keyboard: timeSlots.map(slot => [
-        { text: slot, callback_data: `accept_meeting_${chatId}_${slot}_${description}` }
+        { text: slot, callback_data: `accept_meeting_${initiatorId}_${slot}_${description}` }
       ])
     }
   };
 
-  await bot.sendMessage(counterpartId, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, opts);
-  await bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
+  await bot.sendMessage(counterpartId, `You have a meeting request from @${initiatorId}: ${description}. Please choose one of the available time slots:`, opts);
 };
 
 // Log commitments for feedback
