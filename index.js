@@ -383,15 +383,15 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
 
 // Handle callback for choosing time slots and other meeting-related actions
 bot.on('callback_query', async (callbackQuery) => {
-  const msg = callbackQuery.message;
+  const msg = callbackController.message;
   const chatId = msg.chat.id;
   const data = callbackQuery.data.split('_');
 
   console.log(`Callback query received: ${callbackQuery.data}`);
 
   if (data[0] === 'choose' && data[1] === 'date') {
-    const meetingRequestId = data[2];
-    const date = data[3];
+    const meetingRequestId = `${data[2]}_${data[3]}`;
+    const date = data[4];
     console.log(`Date chosen: ${date}`);
 
     const availableTimes = [];
@@ -409,9 +409,9 @@ bot.on('callback_query', async (callbackQuery) => {
 
     bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
-    const meetingRequestId = data[2];
-    const date = data[3];
-    const time = data[4];
+    const meetingRequestId = `${data[2]}_${data[3]}`;
+    const date = data[4];
+    const time = data[5];
     console.log(`Time slot chosen: ${date} ${time}`);
 
     try {
@@ -427,7 +427,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
           bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
 
-          if (timeSlots.length > 0) {
+          if (timeSlots.length >= 1) {
             // Ask user if they want to create the meeting request
             const opts = {
               reply_markup: {
