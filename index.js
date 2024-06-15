@@ -331,13 +331,13 @@ bot.on('callback_query', async (callbackQuery) => {
 
     const availableTimes = [];
     for (let hour = 9; hour <= 19; hour++) {
-      availableTimes.push(`${date} ${hour}:00`, `${date} ${hour}:30`);
+      availableTimes.push(`${hour}:00`, `${hour}:30`);
     }
 
     const opts = {
       reply_markup: {
         inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_${meetingRequestId}_${time}` }
+          { text: time, callback_data: `add_timeslot_${meetingRequestId}_${date}_${time}` }
         ])
       }
     };
@@ -345,8 +345,9 @@ bot.on('callback_query', async (callbackQuery) => {
     bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
     const meetingRequestId = data[2];
-    const time = data.slice(3).join('_');
-    console.log(`Time slot chosen: ${time}`);
+    const date = data[3];
+    const time = data.slice(4).join(':');
+    console.log(`Time slot chosen: ${date} ${time}`);
 
     try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
@@ -356,10 +357,10 @@ bot.on('callback_query', async (callbackQuery) => {
         const timeSlots = request.data().timeslots;
 
         if (timeSlots.length < 5) {
-          timeSlots.push(time);
+          timeSlots.push(`${date} ${time}`);
           await requestRef.update({ timeslots: timeSlots });
 
-          bot.sendMessage(chatId, `Added time slot: ${time}`);
+          bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
 
           if (timeSlots.length > 0) {
             // Ask user if they want to create the meeting request
@@ -400,7 +401,7 @@ bot.on('callback_query', async (callbackQuery) => {
         await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
           reply_markup: {
             inline_keyboard: timeslots.map(slot => [
-              { text: slot, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+              { text: slot.split(' ')[1], callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
             ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
         });
@@ -425,7 +426,7 @@ bot.on('callback_query', async (callbackQuery) => {
     }
   } else if (data[0] === 'accept' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
-    const selectedTimeSlot = data.slice(3).join('_');
+    const selectedTimeSlot = data.slice(3).join(' ');
 
     try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
@@ -495,43 +496,6 @@ bot.on('callback_query', async (callbackQuery) => {
   }
 });
 
-// Log commitments for feedback
-bot.onText(/\/feedback (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) @(\w+) (.+)/, async (msg, match) => {
-  console.log('/feedback command received');
-  const chatId = msg.chat.id;
-  const [dateTime, counterpartUsername, description] = match.slice(1);
-
-  try {
-    const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
-
-    if (!counterpartRef.empty) {
-      const counterpart = counterpartRef.docs[0];
-      const counterpartId = counterpart.id;
-
-      console.log(`Requesting counterpart ${counterpartId} to accept feedback: ${description} on ${dateTime}`);
-
-      const [date, time] = dateTime.split(' ');
-
-      const opts = {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: 'Accept', callback_data: `accept_feedback_${chatId}_${counterpartUsername}_${dateTime}_${description}` },
-              { text: 'Decline', callback_data: `decline_feedback_${chatId}_${counterpartUsername}_${description}` }
-            ]
-          ]
-        }
-      };
-
-      bot.sendMessage(counterpartId, `You have a feedback request from @${msg.from.username}: ${description} on ${date} at ${time}. Do you accept?`, opts);
-    } else {
-      bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
-    }
-  } catch (error) {
-    console.error('Error requesting feedback:', error);
-    bot.sendMessage(chatId, 'There was an error sending the feedback request. Please try again.');
-  }
-});
 
 // Handle feedback days command
 bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
