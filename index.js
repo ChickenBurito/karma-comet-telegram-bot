@@ -383,15 +383,15 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
 
 // Handle callback for choosing time slots and other meeting-related actions
 bot.on('callback_query', async (callbackQuery) => {
-  const msg = callbackController.message;
+  const msg = callbackQuery.message;
   const chatId = msg.chat.id;
   const data = callbackQuery.data.split('_');
 
   console.log(`Callback query received: ${callbackQuery.data}`);
 
   if (data[0] === 'choose' && data[1] === 'date') {
-    const meetingRequestId = `${data[2]}_${data[3]}`;
-    const date = data[4];
+    const meetingRequestId = data[2];
+    const date = data[3];
     console.log(`Date chosen: ${date}`);
 
     const availableTimes = [];
@@ -409,9 +409,9 @@ bot.on('callback_query', async (callbackQuery) => {
 
     bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
-    const meetingRequestId = `${data[2]}_${data[3]}`;
-    const date = data[4];
-    const time = data[5];
+    const meetingRequestId = data[2];
+    const date = data[3];
+    const time = data[4];
     console.log(`Time slot chosen: ${date} ${time}`);
 
     try {
@@ -465,16 +465,15 @@ bot.on('callback_query', async (callbackQuery) => {
         // Send meeting request to counterpart
         await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
           reply_markup: {
-            inline_keyboard: timeslots.map(slot => {
-              const [date, time] = slot.split(' '); // Extract date and time
-              return [{ text: `${date} ${time}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }];
-            }).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
+            inline_keyboard: timeslots.map(slot => [
+              { text: `${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+            ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
         });
 
         bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
       } else {
-        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
+        bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
       console.error('Error submitting meeting request:', error);
@@ -529,7 +528,7 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
         bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
       } else {
-        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
+        bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
       console.error('Error accepting meeting request:', error);
@@ -553,7 +552,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
         bot.sendMessage(chatId, 'You have declined the meeting request.');
       } else {
-        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
+        bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
       console.error('Error declining meeting request:', error);
