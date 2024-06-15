@@ -402,7 +402,7 @@ bot.on('callback_query', async (callbackQuery) => {
     const opts = {
       reply_markup: {
         inline_keyboard: availableTimes.map(time => [
-          { text: `${date} ${time}`, callback_data: `add_timeslot_${meetingRequestId}_${date}_${time}` }
+          { text: time, callback_data: `add_timeslot_${meetingRequestId}_${date}_${time}` }
         ])
       }
     };
@@ -411,7 +411,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
     const meetingRequestId = data[2];
     const date = data[3];
-    const time = `${data[4]}:${data[5]}`;
+    const time = data[4];
     console.log(`Time slot chosen: ${date} ${time}`);
 
     try {
@@ -465,9 +465,10 @@ bot.on('callback_query', async (callbackQuery) => {
         // Send meeting request to counterpart
         await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
           reply_markup: {
-            inline_keyboard: timeslots.map(slot => [
-              { text: slot, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
-            ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
+            inline_keyboard: timeslots.map(slot => {
+              const [date, time] = slot.split(' '); // Extract date and time
+              return [{ text: `${date} ${time}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }];
+            }).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
         });
 
