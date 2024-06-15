@@ -346,7 +346,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
     const meetingRequestId = data[2];
     const date = data[3];
-    const time = data.slice(4).join(':');
+    const time = `${data[4]}:${data[5]}`;
     console.log(`Time slot chosen: ${date} ${time}`);
 
     try {
@@ -495,7 +495,6 @@ bot.on('callback_query', async (callbackQuery) => {
     }
   }
 });
-
 
 // Handle feedback days command
 bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
