@@ -291,7 +291,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       // Ask user to choose date
       const dates = [];
       const now = new Date();
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 14; i++) {
         const date = new Date(now);
         date.setDate(now.getDate() + i);
         dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
@@ -316,7 +316,20 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   }
 });
 
-// Handle callback for choosing time slots
+// Function to send meeting request to counterpart
+const sendMeetingRequest = async (initiatorId, counterpartId, timeslots, description) => {
+  const opts = {
+    reply_markup: {
+      inline_keyboard: timeslots.map(slot => [
+        { text: slot, callback_data: `accept_meeting_${initiatorId}_${slot}_${description}` }
+      ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${initiatorId}_${description}` }]])
+    }
+  };
+
+  await bot.sendMessage(counterpartId, `You have a meeting request from @${initiatorId}: ${description}. Please choose one of the available time slots:`, opts);
+};
+
+// Handle callback for choosing time slots and other meeting-related actions
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
@@ -396,14 +409,8 @@ bot.on('callback_query', async (callbackQuery) => {
         // Update request_submitted to true
         await requestRef.update({ request_submitted: true });
 
-        // Send meeting request to counterpart
-        await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
-          reply_markup: {
-            inline_keyboard: timeslots.map(slot => [
-              { text: slot, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
-            ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
-          }
-        });
+        // Send meeting request to counterpart using the function
+        await sendMeetingRequest(chatId, counterpart_id, timeslots, description);
 
         bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
       } else {
@@ -432,7 +439,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { initiatorId, counterpartId, description } = request.data();
+        const { recruiter_id, counterpart_id } = request.data();
 
         // Update counterpart_accepted to true and add selected time slot
         await requestRef.update({
@@ -452,15 +459,15 @@ bot.on('callback_query', async (callbackQuery) => {
           meeting_id: commitmentId,
           created_at: request.data().created_at,
           accepted_at: new Date().toISOString(),
-          meeting_time: selectedTimeSlot,
+          meeting_scheduled_at: selectedTimeSlot,
           description: request.data().description,
-          recruiter_commitment_fulfilled: false,
-          counterpart_commitment_fulfilled: false
+          recruiter_commitment_fulfilled: null,
+          counterpart_commitment_fulfilled: null
         });
 
         // Notify both parties
-        bot.sendMessage(initiatorId, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
-        bot.sendMessage(counterpartId, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+        bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+        bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
       } else {
         bot.sendMessage(chatId, 'Meeting request not found.');
       }
@@ -476,13 +483,13 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { initiatorId } = request.data();
+        const { recruiter_id } = request.data();
 
         // Update counterpart_accepted to false
         await requestRef.update({ counterpart_accepted: false });
 
         // Notify initiator
-        bot.sendMessage(initiatorId, `Your meeting request has been declined by @${request.data().counterpart_name}.`);
+        bot.sendMessage(recruiter_id, `Your meeting request has been declined by @${request.data().counterpart_name}.`);
 
         bot.sendMessage(chatId, 'You have declined the meeting request.');
       } else {
@@ -494,19 +501,6 @@ bot.on('callback_query', async (callbackQuery) => {
     }
   }
 });
-
-// Function to send meeting request to counterpart
-const sendMeetingRequest = async (initiatorId, counterpartId, timeslots, description) => {
-  const opts = {
-    reply_markup: {
-      inline_keyboard: timeslots.map(slot => [
-        { text: slot, callback_data: `accept_meeting_${initiatorId}_${slot}_${description}` }
-      ])
-    }
-  };
-
-  await bot.sendMessage(counterpartId, `You have a meeting request from @${initiatorId}: ${description}. Please choose one of the available time slots:`, opts);
-};
 
 // Log commitments for feedback
 bot.onText(/\/feedback (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) @(\w+) (.+)/, async (msg, match) => {
@@ -728,10 +722,10 @@ bot.on('callback_query', async (callbackQuery) => {
 
             bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${expiryDate}.`);
 
-            // Automatically create feedback request after 2 hours
+            // Automatically create feedback request after 2.5 hours
             setTimeout(async () => {
               bot.sendMessage(chatId, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>_${commitmentId}`);
-            }, 2 * 60 * 60 * 1000); // 2 hours in milliseconds
+            }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
           } else {
             bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}.`);
           }
@@ -743,6 +737,39 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error updating status:', error);
       bot.sendMessage(chatId, 'There was an error updating the status. Please try again.');
     }
+  }
+});
+
+////******************////
+// Subscription logic
+////******************////  
+
+bot.onText(/\/subscribe/, async (msg) => {
+  console.log('/subscribe command received');
+  const chatId = msg.chat.id;
+  const userRef = db.collection('users').doc(chatId.toString());
+  const user = await userRef.get();
+
+  if (user.exists && user.data().userType === 'recruiter') {
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price: 'price_1PNcuLP9AlrL3WaNIocXw0Ml', // Replace with actual price ID
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        success_url: 'https://your-success-url.com',
+        cancel_url: 'https://your-cancel-url.com',
+      });
+
+      bot.sendMessage(chatId, `Please complete your subscription payment: ${session.url}`);
+    } catch (error) {
+      console.error('Error creating Stripe session:', error);
+      bot.sendMessage(chatId, 'There was an error processing your subscription. Please try again.');
+    }
+  } else {
+    bot.sendMessage(chatId, "Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.");
   }
 });
 
