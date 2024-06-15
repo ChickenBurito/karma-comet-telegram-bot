@@ -346,7 +346,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
     const meetingRequestId = data[2];
     const date = data[3];
-    const time = `${data[4]}:${data[5]}`;
+    const time = data[4];
     console.log(`Time slot chosen: ${date} ${time}`);
 
     try {
@@ -378,6 +378,7 @@ bot.on('callback_query', async (callbackQuery) => {
           bot.sendMessage(chatId, 'You have already selected 5 time slots.');
         }
       } else {
+        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
         bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
@@ -408,6 +409,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
         bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
       } else {
+        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
         bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
@@ -463,6 +465,7 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
         bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
       } else {
+        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
         bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
@@ -487,6 +490,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
         bot.sendMessage(chatId, 'You have declined the meeting request.');
       } else {
+        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
         bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
