@@ -316,6 +316,71 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   }
 });
 
+// Handle /meeting command
+bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
+  console.log('/meeting command received');
+  const chatId = msg.chat.id;
+  const [counterpartUsername, description] = match.slice(1);
+  console.log(`Meeting request by @${msg.from.username} for @${counterpartUsername} with description: ${description}`);
+
+  try {
+    const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
+
+    if (!counterpartRef.empty) {
+      const counterpart = counterpartRef.docs[0];
+      const counterpartId = counterpart.id;
+      console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
+
+      const recruiterCompanyName = msg.from.company_name || '';
+      const recruiterName = msg.from.username;
+
+      // Generate a unique meeting request ID
+      const meetingRequestId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+      // Store the meeting request in Firestore
+      await db.collection('meetingRequests').doc(meetingRequestId).set({
+        recruiter_name: recruiterName,
+        recruiter_company_name: recruiterCompanyName,
+        recruiter_id: chatId,
+        counterpart_id: counterpartId,
+        counterpart_name: counterpartUsername,
+        meeting_request_id: meetingRequestId,
+        created_at: new Date().toISOString(),
+        timeslots: [],
+        description: description,
+        request_submitted: false,
+        counterpart_accepted: false
+      });
+      console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId}`);
+
+      // Ask user to choose date
+      const dates = [];
+      const now = new Date();
+      for (let i = 0; i < 14; i++) {
+        const date = new Date(now);
+        date.setDate(now.getDate() + i);
+        dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
+      }
+
+      const opts = {
+        reply_markup: {
+          inline_keyboard: dates.map(date => [
+            { text: date, callback_data: `choose_date_${meetingRequestId}_${date}` }
+          ])
+        }
+      };
+
+      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
+    } else {
+      console.log(`User @${counterpartUsername} not found.`);
+      bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
+    }
+  } catch (error) {
+    console.error('Error handling /meeting command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+  }
+});
+
 // Handle callback for choosing time slots and other meeting-related actions
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
@@ -337,7 +402,7 @@ bot.on('callback_query', async (callbackQuery) => {
     const opts = {
       reply_markup: {
         inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_${meetingRequestId}_${date}_${time}` }
+          { text: `${date} ${time}`, callback_data: `add_timeslot_${meetingRequestId}_${date}_${time}` }
         ])
       }
     };
@@ -346,7 +411,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
     const meetingRequestId = data[2];
     const date = data[3];
-    const time = data[4];
+    const time = `${data[4]}:${data[5]}`;
     console.log(`Time slot chosen: ${date} ${time}`);
 
     try {
@@ -378,8 +443,7 @@ bot.on('callback_query', async (callbackQuery) => {
           bot.sendMessage(chatId, 'You have already selected 5 time slots.');
         }
       } else {
-        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
-        bot.sendMessage(chatId, 'Meeting request not found.');
+        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
       }
     } catch (error) {
       console.error('Error adding time slot:', error);
@@ -402,15 +466,14 @@ bot.on('callback_query', async (callbackQuery) => {
         await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
           reply_markup: {
             inline_keyboard: timeslots.map(slot => [
-              { text: slot.split(' ')[1], callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+              { text: slot, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
             ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
         });
 
         bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
       } else {
-        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
-        bot.sendMessage(chatId, 'Meeting request not found.');
+        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
       }
     } catch (error) {
       console.error('Error submitting meeting request:', error);
@@ -465,8 +528,7 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
         bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
       } else {
-        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
-        bot.sendMessage(chatId, 'Meeting request not found.');
+        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
       }
     } catch (error) {
       console.error('Error accepting meeting request:', error);
@@ -490,8 +552,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
         bot.sendMessage(chatId, 'You have declined the meeting request.');
       } else {
-        console.log(`Meeting request not found for ID: ${meetingRequestId}`);
-        bot.sendMessage(chatId, 'Meeting request not found.');
+        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
       }
     } catch (error) {
       console.error('Error declining meeting request:', error);
