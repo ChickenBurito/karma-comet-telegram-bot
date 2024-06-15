@@ -266,24 +266,32 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const counterpartId = counterpart.id;
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
-      // Generate a unique meeting ID
-      const meetingId = `meeting_${Date.now()}`;
+      const recruiterCompanyName = msg.from.company_name || '';
+      const recruiterName = msg.from.username;
 
-      // Store the counterpart and description in Firestore
-      await db.collection('meetingRequests').doc(meetingId).set({
-        meetingId: meetingId,
-        initiatorId: chatId,
-        counterpartId: counterpartId,
-        counterpartUsername: counterpartUsername,
+      // Generate a unique meeting request ID
+      const meetingRequestId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+      // Store the meeting request in Firestore
+      await db.collection('meetingRequests').doc(meetingRequestId).set({
+        recruiter_name: recruiterName,
+        recruiter_company_name: recruiterCompanyName,
+        recruiter_id: chatId,
+        counterpart_id: counterpartId,
+        counterpart_name: counterpartUsername,
+        meeting_request_id: meetingRequestId,
+        created_at: new Date().toISOString(),
+        timeslots: [],
         description: description,
-        timeSlots: []
+        request_submitted: false,
+        counterpart_accepted: false
       });
-      console.log(`Meeting request stored in Firestore for meeting ID: ${meetingId}`);
+      console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId}`);
 
       // Ask user to choose date
       const dates = [];
       const now = new Date();
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < 7; i++) {
         const date = new Date(now);
         date.setDate(now.getDate() + i);
         dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
@@ -292,7 +300,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const opts = {
         reply_markup: {
           inline_keyboard: dates.map(date => [
-            { text: date, callback_data: `choose_date_${meetingId}_${date}` }
+            { text: date, callback_data: `choose_date_${meetingRequestId}_${date}` }
           ])
         }
       };
@@ -317,7 +325,7 @@ bot.on('callback_query', async (callbackQuery) => {
   console.log(`Callback query received: ${callbackQuery.data}`);
 
   if (data[0] === 'choose' && data[1] === 'date') {
-    const meetingId = data[2];
+    const meetingRequestId = data[2];
     const date = data[3];
     console.log(`Date chosen: ${date}`);
 
@@ -329,27 +337,27 @@ bot.on('callback_query', async (callbackQuery) => {
     const opts = {
       reply_markup: {
         inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_${meetingId}_${time}` }
+          { text: time, callback_data: `add_timeslot_${meetingRequestId}_${time}` }
         ])
       }
     };
 
     bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot') {
-    const meetingId = data[2];
+    const meetingRequestId = data[2];
     const time = data.slice(3).join('_');
     console.log(`Time slot chosen: ${time}`);
 
     try {
-      const requestRef = db.collection('meetingRequests').doc(meetingId);
+      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       const request = await requestRef.get();
 
       if (request.exists) {
-        const timeSlots = request.data().timeSlots;
+        const timeSlots = request.data().timeslots;
 
         if (timeSlots.length < 5) {
           timeSlots.push(time);
-          await requestRef.update({ timeSlots });
+          await requestRef.update({ timeslots: timeSlots });
 
           bot.sendMessage(chatId, `Added time slot: ${time}`);
 
@@ -358,12 +366,12 @@ bot.on('callback_query', async (callbackQuery) => {
             const opts = {
               reply_markup: {
                 inline_keyboard: [
-                  [{ text: 'Create Meeting Request', callback_data: `create_meeting_${meetingId}` }],
-                  [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingId}` }]
+                  [{ text: 'Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }],
+                  [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
                 ]
               }
             };
-            bot.sendMessage(chatId, 'Do you want to create the meeting request now?', opts);
+            bot.sendMessage(chatId, 'Do you want to submit the meeting request now?', opts);
           }
         } else {
           bot.sendMessage(chatId, 'You have already selected 5 time slots.');
@@ -375,45 +383,123 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error adding time slot:', error);
       bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
     }
-  } else if (data[0] === 'create' && data[1] === 'meeting') {
-    const meetingId = data[2];
+  } else if (data[0] === 'submit' && data[1] === 'meeting') {
+    const meetingRequestId = data[2];
 
     try {
-      const requestRef = db.collection('meetingRequests').doc(meetingId);
+      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { initiatorId, counterpartId, timeSlots, description } = request.data();
+        const { counterpart_id, description, timeslots } = request.data();
+
+        // Update request_submitted to true
+        await requestRef.update({ request_submitted: true });
 
         // Send meeting request to counterpart
-        await sendMeetingRequest(initiatorId, counterpartId, timeSlots, description);
+        await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
+          reply_markup: {
+            inline_keyboard: timeslots.map(slot => [
+              { text: slot, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+            ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
+          }
+        });
 
-        bot.sendMessage(initiatorId, 'Meeting request sent to the counterpart.');
+        bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
       } else {
         bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
-      console.error('Error creating meeting request:', error);
-      bot.sendMessage(chatId, 'There was an error creating the meeting request. Please try again.');
+      console.error('Error submitting meeting request:', error);
+      bot.sendMessage(chatId, 'There was an error submitting the meeting request. Please try again.');
     }
   } else if (data[0] === 'cancel' && data[1] === 'meeting') {
-    const meetingId = data[2];
+    const meetingRequestId = data[2];
 
     try {
-      await db.collection('meetingRequests').doc(meetingId).delete();
+      await db.collection('meetingRequests').doc(meetingRequestId).delete();
       bot.sendMessage(chatId, 'Meeting request cancelled.');
     } catch (error) {
       console.error('Error cancelling meeting request:', error);
       bot.sendMessage(chatId, 'There was an error cancelling the meeting request. Please try again.');
     }
+  } else if (data[0] === 'accept' && data[1] === 'meeting') {
+    const meetingRequestId = data[2];
+    const selectedTimeSlot = data.slice(3).join('_');
+
+    try {
+      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+      const request = await requestRef.get();
+
+      if (request.exists) {
+        const { initiatorId, counterpartId, description } = request.data();
+
+        // Update counterpart_accepted to true and add selected time slot
+        await requestRef.update({
+          counterpart_accepted: true,
+          selected_time_slot: selectedTimeSlot
+        });
+
+        // Create a commitment
+        const commitmentId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        await db.collection('commitments').doc(commitmentId).set({
+          recruiter_name: request.data().recruiter_name,
+          recruiter_company_name: request.data().recruiter_company_name,
+          recruiter_id: request.data().recruiter_id,
+          counterpart_id: request.data().counterpart_id,
+          counterpart_name: request.data().counterpart_name,
+          meeting_request_id: meetingRequestId,
+          meeting_id: commitmentId,
+          created_at: request.data().created_at,
+          accepted_at: new Date().toISOString(),
+          meeting_time: selectedTimeSlot,
+          description: request.data().description,
+          recruiter_commitment_fulfilled: false,
+          counterpart_commitment_fulfilled: false
+        });
+
+        // Notify both parties
+        bot.sendMessage(initiatorId, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+        bot.sendMessage(counterpartId, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+      } else {
+        bot.sendMessage(chatId, 'Meeting request not found.');
+      }
+    } catch (error) {
+      console.error('Error accepting meeting request:', error);
+      bot.sendMessage(chatId, 'There was an error accepting the meeting request. Please try again.');
+    }
+  } else if (data[0] === 'decline' && data[1] === 'meeting') {
+    const meetingRequestId = data[2];
+
+    try {
+      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+      const request = await requestRef.get();
+
+      if (request.exists) {
+        const { initiatorId } = request.data();
+
+        // Update counterpart_accepted to false
+        await requestRef.update({ counterpart_accepted: false });
+
+        // Notify initiator
+        bot.sendMessage(initiatorId, `Your meeting request has been declined by @${request.data().counterpart_name}.`);
+
+        bot.sendMessage(chatId, 'You have declined the meeting request.');
+      } else {
+        bot.sendMessage(chatId, 'Meeting request not found.');
+      }
+    } catch (error) {
+      console.error('Error declining meeting request:', error);
+      bot.sendMessage(chatId, 'There was an error declining the meeting request. Please try again.');
+    }
   }
 });
 
 // Function to send meeting request to counterpart
-const sendMeetingRequest = async (initiatorId, counterpartId, timeSlots, description) => {
+const sendMeetingRequest = async (initiatorId, counterpartId, timeslots, description) => {
   const opts = {
     reply_markup: {
-      inline_keyboard: timeSlots.map(slot => [
+      inline_keyboard: timeslots.map(slot => [
         { text: slot, callback_data: `accept_meeting_${initiatorId}_${slot}_${description}` }
       ])
     }
