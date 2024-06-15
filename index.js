@@ -316,19 +316,6 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   }
 });
 
-// Function to send meeting request to counterpart
-const sendMeetingRequest = async (initiatorId, counterpartId, timeslots, description) => {
-  const opts = {
-    reply_markup: {
-      inline_keyboard: timeslots.map(slot => [
-        { text: slot, callback_data: `accept_meeting_${initiatorId}_${slot}_${description}` }
-      ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${initiatorId}_${description}` }]])
-    }
-  };
-
-  await bot.sendMessage(counterpartId, `You have a meeting request from @${initiatorId}: ${description}. Please choose one of the available time slots:`, opts);
-};
-
 // Handle callback for choosing time slots and other meeting-related actions
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
@@ -404,13 +391,19 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { counterpart_id, description, timeslots } = request.data();
+        const { recruiter_id, counterpart_id, description, timeslots } = request.data();
 
         // Update request_submitted to true
         await requestRef.update({ request_submitted: true });
 
-        // Send meeting request to counterpart using the function
-        await sendMeetingRequest(chatId, counterpart_id, timeslots, description);
+        // Send meeting request to counterpart
+        await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
+          reply_markup: {
+            inline_keyboard: timeslots.map(slot => [
+              { text: slot, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+            ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
+          }
+        });
 
         bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
       } else {
