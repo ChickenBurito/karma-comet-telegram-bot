@@ -247,9 +247,9 @@ bot.onText(/\/reset/, async (msg) => {
   }
 });
 
-////******************////
-// Log commitments
-////******************////
+////**********************////
+//++// Log commitments //++//
+////********************////
 
 // Handle /meeting command
 bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
@@ -270,7 +270,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const recruiterName = msg.from.username;
 
       // Generate a unique meeting request ID
-      const meetingRequestId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const meetingRequestId = `${Date.now()}${Math.floor((Math.random() * 1000)+1)}`;
 
       // Store the meeting request in Firestore
       await db.collection('meetingRequests').doc(meetingRequestId).set({
@@ -300,72 +300,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const opts = {
         reply_markup: {
           inline_keyboard: dates.map(date => [
-            { text: date, callback_data: `choose_date_${meetingRequestId}_${date}` }
-          ])
-        }
-      };
-
-      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
-    } else {
-      console.log(`User @${counterpartUsername} not found.`);
-      bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
-    }
-  } catch (error) {
-    console.error('Error handling /meeting command:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
-  }
-});
-
-// Handle /meeting command
-bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
-  console.log('/meeting command received');
-  const chatId = msg.chat.id;
-  const [counterpartUsername, description] = match.slice(1);
-  console.log(`Meeting request by @${msg.from.username} for @${counterpartUsername} with description: ${description}`);
-
-  try {
-    const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
-
-    if (!counterpartRef.empty) {
-      const counterpart = counterpartRef.docs[0];
-      const counterpartId = counterpart.id;
-      console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
-
-      const recruiterCompanyName = msg.from.company_name || '';
-      const recruiterName = msg.from.username;
-
-      // Generate a unique meeting request ID
-      const meetingRequestId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-
-      // Store the meeting request in Firestore
-      await db.collection('meetingRequests').doc(meetingRequestId).set({
-        recruiter_name: recruiterName,
-        recruiter_company_name: recruiterCompanyName,
-        recruiter_id: chatId,
-        counterpart_id: counterpartId,
-        counterpart_name: counterpartUsername,
-        meeting_request_id: meetingRequestId,
-        created_at: new Date().toISOString(),
-        timeslots: [],
-        description: description,
-        request_submitted: false,
-        counterpart_accepted: false
-      });
-      console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId}`);
-
-      // Ask user to choose date
-      const dates = [];
-      const now = new Date();
-      for (let i = 0; i < 14; i++) {
-        const date = new Date(now);
-        date.setDate(now.getDate() + i);
-        dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
-      }
-
-      const opts = {
-        reply_markup: {
-          inline_keyboard: dates.map(date => [
-            { text: date, callback_data: `choose_date_${meetingRequestId}_${date}` }
+            { text: date, callback_data: `choose_date_meeting_${meetingRequestId}_${date}` }
           ])
         }
       };
@@ -389,10 +324,10 @@ bot.on('callback_query', async (callbackQuery) => {
 
   console.log(`Callback query received: ${callbackQuery.data}`);
 
-  if (data[0] === 'choose' && data[1] === 'date') {
-    const meetingRequestId = data[2];
-    const date = data[3];
-    console.log(`Date chosen: ${date}`);
+  if (data[0] === 'choose' && data[1] === 'date' && data[2] === 'meeting') {
+    const date = data[4];
+    const meetingRequestId = data[3];
+    console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId}`);  
 
     const availableTimes = [];
     for (let hour = 9; hour <= 19; hour++) {
@@ -402,17 +337,17 @@ bot.on('callback_query', async (callbackQuery) => {
     const opts = {
       reply_markup: {
         inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_${meetingRequestId}_${date}_${time}` }
+          { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
         ])
       }
     };
 
     bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
-  } else if (data[0] === 'add' && data[1] === 'timeslot') {
-    const meetingRequestId = data[2];
-    const date = data[3];
-    const time = data[4];
-    console.log(`Time slot chosen: ${date} ${time}`);
+  } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
+    const meetingRequestId = data[3];
+    const date = data[4];
+    const time = data[5];
+    console.log(`Time slot chosen: ${date} ${time}, Meeting Request ID: ${meetingRequestId}`);  
 
     try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
