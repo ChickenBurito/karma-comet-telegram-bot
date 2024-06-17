@@ -392,27 +392,27 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { recruiter_id, counterpart_id, description, timeslots } = request.data();
+          const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name } = request.data();
 
-        // Update request_submitted to true
-        await requestRef.update({ request_submitted: true });
+          // Update request_submitted to true
+          await requestRef.update({ request_submitted: true });
 
-        // Send meeting request to counterpart
-        await bot.sendMessage(counterpart_id, `You have a meeting request from @${recruiter_name}: ${description}. Please choose one of the available time slots:`, {
-          reply_markup: {
-            inline_keyboard: timeslots.map(slot => [
-              { text: `${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
-            ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
-          }
-        });
+          // Send meeting request to counterpart
+          await bot.sendMessage(counterpart_id, `You have a meeting request from @${recruiter_name}: ${description}. Please choose one of the available time slots:`, {
+              reply_markup: {
+                  inline_keyboard: timeslots.map(slot => [
+                      { text: `${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+                  ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
+              }
+          });
 
-        bot.sendMessage(chatId, `Meeting request sent to @${counterpart_name}.`);
+          bot.sendMessage(recruiter_id, `Meeting request sent to @${counterpart_name}.`);
       } else {
-        bot.sendMessage(chatId, 'Meeting request not found.');
+          bot.sendMessage(recruiter_id, 'Meeting request not found.');
       }
-    } catch (error) {
+  } catch (error) {
       console.error('Error submitting meeting request:', error);
-      bot.sendMessage(chatId, 'There was an error submitting the meeting request. Please try again.');
+      bot.sendMessage(recruiter_id, 'There was an error submitting the meeting request. Please try again.');
     }
   } else if (data[0] === 'cancel' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
