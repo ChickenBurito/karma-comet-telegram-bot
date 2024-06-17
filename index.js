@@ -109,6 +109,7 @@ bot.onText(/\/register/, async (msg) => {
     console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
     await db.collection('users').doc(chatId.toString()).set({
       name: userName,
+      registered_at: new Date().toISOString(),
       score: 0,
       userType: 'jobSeeker', // Default user type
       subscription: {
