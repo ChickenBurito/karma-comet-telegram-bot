@@ -77,7 +77,7 @@ bot.onText(/\/start/, (msg) => {
   
   🌟 Key Features:
   - **Accountability**: Ensures both job seekers and recruiters keep their promises.
-  - **Commitment Tracking**: Log and track all your commitments with precise dates, times, and descriptions.
+  - **Commitment Tracking**: Log and track all your meetings and feedbacks with precise dates, times, and descriptions.
   - **Automated Reminders**: Never forget a meeting or interview with our timely reminders.
   - **Feedback Enforcement**: Pushes recruiters and Job seekers to share timely feedback, improving transparency and trust.
   - **Score System**: Track your reliability with a scoring system based on your commitment fulfillment.
@@ -89,7 +89,9 @@ bot.onText(/\/start/, (msg) => {
   - **/setjobseeker**: Switch your role back to a job seeker.
   - **/meeting @username description**: Schedule a meeting.
   - **/feedback @username description**: Provide feedback.
-  - **/status**: Update the status of your commitments using easy-to-select buttons.
+  - **/userinfo**: Check your user profile.
+  - **/meetingstatus**: See full list of scheduled meetings.
+  - **/feedbackstatus**: See full list of pending feedbacks.
   - **/subscribe**: Subscribe to premium recruiter services.
   
   KarmaComet Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!`;
@@ -458,8 +460,8 @@ bot.on('callback_query', async (callbackQuery) => {
                     accepted_at: new Date().toISOString(),
                     meeting_scheduled_at: selectedTimeSlot,
                     description: request.data().description,
-                    recruiter_commitment_fulfilled: null,
-                    counterpart_commitment_fulfilled: null
+                    recruiter_commitment_state: 'pending_meeting',
+                    counterpart_commitment_state: 'pending_meeting'
                 });
 
                 // Notify both parties
@@ -468,7 +470,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
                 // Schedule feedback request generation after 2.5 hours
                 setTimeout(async () => {
-                    const commitmentRef = db.collection('meetingCommitments').doc(commitmentId);
+                    const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
                     const commitment = await commitmentRef.get();
 
                     if (commitment.exists) {
@@ -479,10 +481,10 @@ bot.on('callback_query', async (callbackQuery) => {
                         await db.collection('feedbackRequests').doc(feedbackRequestId).set({
                             feedback_request_id: feedbackRequestId,
                             recruiter_id: recruiter_id,
-                            recruiter_name: recruiterName,
+                            recruiter_name: request.data().recruiter_name,
                             counterpart_id: counterpart_id,
-                            counterpart_name: counterpartName,
-                            feedback_created_at: new Date().toISOString(),
+                            counterpart_name: request.data().counterpart_name,
+                            feedback_request_created_at: new Date().toISOString(),
                             feedback_due_date: feedbackDueDate.toISOString(),
                             meeting_request_id: meetingRequestId,
                             meeting_commitment_id: meetingCommitmentId,
@@ -537,7 +539,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const feedbackRequest = await feedbackRequestRef.get();
 
       if (feedbackRequest.exists) {
-        const { feedbackRequestId, counterpart_id, recruiterName, counterpartName, meetingRequestId, meetingCommitmentId, feedback_planned_at } = feedbackRequest.data();
+        const { counterpart_id, recruiter_name, counterpart_name, meeting_request_id, meeting_commitment_id } = feedbackRequest.data();
 
         await feedbackRequestRef.update({ feedback_planned_at: feedbackDueDate, feedback_submitted: true });
 
@@ -547,14 +549,14 @@ bot.on('callback_query', async (callbackQuery) => {
           feedback_commitment_id: feedbackCommitmentId,
           feedback_request_id: feedbackRequestId,
           recruiter_id: feedbackRequest.data().recruiter_id,
-          recruiter_name: recruiterName,
+          recruiter_name: recruiter_name,
           counterpart_id: counterpart_id,
-          counterpart_name: counterpartName,
-          meeting_request_id: meetingRequestId,
-          meeting_commitment_id: meetingCommitmentId,
+          counterpart_name: counterpart_name,
+          meeting_request_id: meeting_request_id,
+          meeting_commitment_id: meeting_commitment_id,
           feedback_planned_at: feedbackDueDate,
-          recruiter_commitment_fulfilled: null,
-          counterpart_commitment_fulfilled: null
+          recruiter_commitment_state: 'pending_feedback',
+          counterpart_commitment_state: 'pending_feedback'
         });
 
         bot.sendMessage(counterpart_id, `The recruiter will provide feedback by ${new Date(feedbackDueDate).toLocaleString()}.`);
@@ -706,7 +708,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
               const data = doc.data();
               responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
               responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
-              responseMessage += `Feedback Due Date: ${data.feedbackDueDate}\n\n`;
+              responseMessage += `Feedback Due Date: ${data.feedback_planned_at}\n\n`;
           });
           bot.sendMessage(chatId, responseMessage);
       } else {
@@ -796,6 +798,63 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error updating status:', error);
       bot.sendMessage(chatId, 'There was an error updating the status. Please try again.');
     }
+  } else if (action === 'review') {
+    const chatId = msg.chat.id;
+
+    try {
+      console.log(`Updating review for commitment ${commitmentId} to ${status}`);
+      const commitmentRef = db.collection('commitments').doc(commitmentId);
+      const commitment = await commitmentRef.get();
+
+      if (commitment.exists) {
+        const commitmentData = commitment.data();
+        const commitmentType = commitmentData.type;
+
+        let userType, counterpartType;
+        if (commitmentType === 'meeting') {
+          userType = 'recruiter';
+          counterpartType = 'jobSeeker';
+        } else if (commitmentType === 'feedback') {
+          userType = 'jobSeeker';
+          counterpartType = 'recruiter';
+        }
+
+        if (status === 'fulfilled') {
+          const newScore = user.data().score + 10;
+          await userRef.update({ score: newScore });
+          await commitmentRef.update({ [`${userType}_commitment_state`]: 'fulfilled' });
+        } else if (status === 'missed') {
+          const newScore = user.data().score - 10;
+          await userRef.update({ score: newScore });
+          await commitmentRef.update({ [`${userType}_commitment_state`]: 'missed' });
+        }
+
+        const counterpartId = commitmentData[`${counterpartType}_id`];
+        const user = await userRef.get();
+
+        if (user.exists) {
+          const opts = {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: 'Attended', callback_data: `review_${commitmentId}_attended` },
+                  { text: 'Missed', callback_data: `review_${commitmentId}_missed` }
+                ]
+              ]
+            }
+          };
+
+          bot.sendMessage(counterpartId, `Update your commitment status for "${commitment.data().description}":`, opts);
+        }
+
+        bot.sendMessage(chatId, `Your commitment status for "${commitment.data().description}" has been updated to ${status}.`);
+      } else {
+        bot.sendMessage(chatId, 'Commitment not found.');
+      }
+    } catch (error) {
+      console.error('Error updating review status:', error);
+      bot.sendMessage(chatId, 'There was an error updating the review status. Please try again.');
+    }
   }
 });
 
@@ -878,7 +937,7 @@ const sendReminders = async () => {
 
 schedule.scheduleJob('0 * * * *', sendReminders); // Run every hour
 
-    // Express app setup
+// Express app setup
 const app = express();
 app.use(bodyParser.json());
 
