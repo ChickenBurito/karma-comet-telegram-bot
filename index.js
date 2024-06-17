@@ -67,6 +67,7 @@ bot.on('message', (msg) => {
 const commands = [
   { command: '/start', description: 'Start the KarmaComet bot' },
   { command: '/register', description: 'Register as a user' },
+  { command: '/meeting', description: 'To schedule a meeting add @username and description' },
   { command: '/userinfo', description: 'Get user information' },
   { command: '/meetingstatus', description: 'Get scheduled meetings' },
   { command: '/feedbackstatus', description: 'Get scheduled feedbacks' },
@@ -97,19 +98,18 @@ bot.onText(/\/start/, (msg) => {
  The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. I ensure that all parties stay true to their commitments, helping everyone save time and money.
   
   🌟 Key Features:
-  - **Accountability**: Ensures both job seekers and recruiters keep their promises.
-  - **Commitment Tracking**: Log and track all your meetings and feedbacks with precise dates, times, and descriptions.
-  - **Automated Reminders**: Never forget a meeting or interview with our timely reminders.
-  - **Feedback Enforcement**: Pushes recruiters and Job seekers to share timely feedback, improving transparency and trust.
-  - **Score System**: Track your reliability with a scoring system based on your commitment fulfillment.
-  - **Subscription Services**: Recruiters can subscribe for advanced features and management tools.
+  🟢 Accountability: Ensures both job seekers and recruiters keep their promises.
+  🟢 Commitment Tracking: Log and track all your meetings and feedbacks with precise dates, times, and descriptions.
+  🟢 Automated Reminders: Never forget a meeting or interview with our timely reminders.
+  🟢 Feedback Enforcement: Pushes recruiters and Job seekers to share timely feedback, improving transparency and trust.
+  🟢 Score System: Track your reliability with a scoring system based on your commitment fulfillment.
+  🟢 Subscription Services: Recruiters can subscribe for advanced features and management tools.
   
   📋 User Guide:
   - **/register**: Register yourself as a job seeker using your Telegram username.
   - **/setrecruiter**: Switch your role to a recruiter.
   - **/setjobseeker**: Switch your role back to a job seeker.
   - **/meeting @username description**: Schedule a meeting.
-  - **/feedback @username description**: Provide feedback.
   - **/userinfo**: Check your user profile.
   - **/meetingstatus**: See full list of scheduled meetings.
   - **/feedbackstatus**: See full list of pending feedbacks.
