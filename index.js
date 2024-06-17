@@ -247,9 +247,9 @@ bot.onText(/\/reset/, async (msg) => {
   }
 });
 
-////**********************////
-//++// Log commitments //++//
-////********************////
+////*********************************////
+//++// Handle meeting commitments //++//
+////*******************************////
 
 // Handle /meeting command
 bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
@@ -464,6 +464,30 @@ bot.on('callback_query', async (callbackQuery) => {
                 // Notify both parties
                 bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
                 bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+
+                // Schedule feedback request generation after 2.5 hours
+                setTimeout(async () => {
+                    const commitmentRef = db.collection('meetingCommitments').doc(commitmentId);
+                    const commitment = await commitmentRef.get();
+
+                    if (commitment.exists) {
+                        const feedbackRequestId = `feedback_${commitmentId}`;
+                        const feedbackDueDate = new Date();
+                        feedbackDueDate.setHours(feedbackDueDate.getHours() + 2.5);
+
+                        await db.collection('feedbackRequests').doc(feedbackRequestId).set({
+                            commitment_id: commitmentId,
+                            recruiter_id: recruiter_id,
+                            counterpart_id: counterpart_id,
+                            feedback_due_date: feedbackDueDate.toISOString(),
+                            feedback_planned_at: null,
+                            feedback_submitted: false
+                        });
+
+                        bot.sendMessage(recruiter_id, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>_${feedbackRequestId}`);
+                    }
+                }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
+
             } else {
                 bot.sendMessage(chatId, 'Invalid time slot selected.');
             }
@@ -498,125 +522,96 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error declining meeting request:', error);
       bot.sendMessage(chatId, 'There was an error declining the meeting request. Please try again.');
     }
+  } else if (data[0] === 'approve' && data[1] === 'feedback') {
+    const feedbackRequestId = data[2];
+    const feedbackDueDate = data[3];
+
+    try {
+      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+      const feedbackRequest = await feedbackRequestRef.get();
+
+      if (feedbackRequest.exists) {
+        const { commitment_id, counterpart_id, feedback_planned_at } = feedbackRequest.data();
+
+        await feedbackRequestRef.update({ feedback_planned_at: feedbackDueDate, feedback_submitted: true });
+
+        // Create feedback commitment
+        const feedbackCommitmentId = `feedback_commitment_${commitment_id}`;
+        await db.collection('feedbackCommitments').doc(feedbackCommitmentId).set({
+          commitment_id: commitment_id,
+          recruiter_id: feedbackRequest.data().recruiter_id,
+          counterpart_id: counterpart_id,
+          feedback_planned_at: feedbackDueDate,
+          feedback_scheduled_at: feedback_planned_at,
+          recruiter_commitment_fulfilled: null,
+          counterpart_commitment_fulfilled: null
+        });
+
+        bot.sendMessage(counterpart_id, `The recruiter will provide feedback by ${new Date(feedbackDueDate).toLocaleString()}.`);
+        bot.sendMessage(chatId, 'Feedback request approved.');
+      } else {
+        bot.sendMessage(chatId, 'Feedback request not found.');
+      }
+    } catch (error) {
+      console.error('Error approving feedback request:', error);
+      bot.sendMessage(chatId, 'There was an error approving the feedback request. Please try again.');
+    }
+  } else if (data[0] === 'decline' && data[1] === 'feedback') {
+    const feedbackRequestId = data[2];
+
+    try {
+      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+      const feedbackRequest = await feedbackRequestRef.get();
+
+      if (feedbackRequest.exists) {
+        await feedbackRequestRef.delete();
+
+        bot.sendMessage(feedbackRequest.data().recruiter_id, 'Your feedback request was declined by the job seeker.');
+        bot.sendMessage(chatId, 'You have declined the feedback request.');
+      } else {
+        bot.sendMessage(chatId, 'Feedback request not found.');
+      }
+    } catch (error) {
+      console.error('Error declining feedback request:', error);
+      bot.sendMessage(chatId, 'There was an error declining the feedback request. Please try again.');
+    }
   }
 });
 
-// Handle feedback days command
+// Handle /feedbackdays command
 bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
   console.log('/feedbackdays command received');
   const chatId = msg.chat.id;
-  const [days, commitmentId] = match.slice(1);
+  const [days, feedbackRequestId] = match.slice(1);
 
   try {
-    const commitmentRef = db.collection('commitments').doc(commitmentId);
-    const commitment = await commitmentRef.get();
+    const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+    const feedbackRequest = await feedbackRequestRef.get();
 
-    if (commitment.exists) {
-      const counterpartId = commitment.data().counterpartId;
+    if (feedbackRequest.exists) {
       const feedbackDueDate = new Date();
       feedbackDueDate.setDate(feedbackDueDate.getDate() + parseInt(days));
+
+      await feedbackRequestRef.update({ feedback_due_date: feedbackDueDate.toISOString() });
 
       const opts = {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: 'Approve', callback_data: `approve_feedback_${commitmentId}_${feedbackDueDate.toISOString()}` },
-              { text: 'Decline', callback_data: `decline_feedback_${commitmentId}` }
+              { text: 'Approve', callback_data: `approve_feedback_${feedbackRequestId}_${feedbackDueDate.toISOString()}` },
+              { text: 'Decline', callback_data: `decline_feedback_${feedbackRequestId}` }
             ]
           ]
         }
       };
 
-      bot.sendMessage(counterpartId, `You have a feedback request from @${msg.from.username} for the meeting "${commitment.data().description}". Feedback will be provided within ${days} days. Do you approve?`, opts);
+      bot.sendMessage(feedbackRequest.data().counterpart_id, `You have a feedback request from @${msg.from.username} for the meeting "${feedbackRequest.data().description}". Feedback will be provided by ${feedbackDueDate.toLocaleString()}. Do you approve?`, opts);
     } else {
-      bot.sendMessage(chatId, 'Commitment not found.');
+      bot.sendMessage(chatId, 'Feedback request not found.');
     }
   } catch (error) {
     console.error('Error handling feedback days:', error);
     bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
-  }
-});
-
-// Handle button callbacks for commitment acceptance or decline
-bot.on('callback_query', async (callbackQuery) => {
-  const msg = callbackQuery.message;
-  const chatId = msg.chat.id;
-  const data = callbackQuery.data.split('_');
-
-  const action = data[0];
-  const type = data[1];
-  const counterpartId = data[2];
-  const counterpartUsername = data[3];
-  const dateTime = data[4];
-  const description = data.slice(5).join('_');
-
-  if (type === 'meeting' && action === 'accept') {
-    try {
-      const [date, time] = dateTime.split(' ');
-
-      console.log(`Creating commitment: ${description} on ${date} at ${time} between ${chatId} and ${counterpartId}`);
-
-      await db.collection('commitments').add({
-        userId: counterpartId,
-        counterpartId: chatId,
-        date,
-        time,
-        description,
-        type: type,
-        status: 'pending'
-      });
-
-      bot.sendMessage(chatId, `Your request for a meeting on ${date} at ${time} has been accepted by @${counterpartUsername}.`);
-      bot.sendMessage(counterpartId, `You have accepted the meeting request from @${msg.from.username} for ${description} on ${date} at ${time}.`);
-    } catch (error) {
-      console.error('Error handling callback query:', error);
-      bot.sendMessage(chatId, 'There was an error processing your response. Please try again.');
-    }
-  }
-
-  if (action === 'decline') {
-    console.log(`Declining commitment: ${description} on ${dateTime} by ${chatId}`);
-
-    bot.sendMessage(counterpartId, `Your request for ${type} on ${dateTime} was declined by @${msg.from.username}.`);
-    bot.sendMessage(chatId, `Your request for ${type} on ${dateTime} was declined by @${counterpartUsername}.`);
-  }
-
-  if (type === 'feedback') {
-    try {
-      const commitmentRef = db.collection('commitments').doc(commitmentId);
-      const commitment = await commitmentRef.get();
-
-      if (commitment.exists) {
-        const feedbackDueDate = new Date(data[3]);
-
-        if (action === 'approve') {
-          console.log(`Creating feedback commitment: ${commitment.data().description} due on ${feedbackDueDate}`);
-
-          await db.collection('commitments').add({
-            userId: commitment.data().userId,
-            counterpartId: commitment.data().counterpartId,
-            date: feedbackDueDate.toISOString().split('T')[0],
-            time: feedbackDueDate.toISOString().split('T')[1].slice(0, 5),
-            description: `Feedback for meeting: ${commitment.data().description}`,
-            type: 'feedback',
-            status: 'pending'
-          });
-
-          bot.sendMessage(commitment.data().userId, `Your feedback request for the meeting "${commitment.data().description}" has been approved by @${msg.from.username}. Feedback is due by ${feedbackDueDate.toDateString()}.`);
-          bot.sendMessage(commitment.data().counterpartId, `You have approved the feedback request for the meeting "${commitment.data().description}". Feedback is due by ${feedbackDueDate.toDateString()}.`);
-        } else if (action === 'decline') {
-          console.log(`Declining feedback commitment: ${commitment.data().description}`);
-
-          bot.sendMessage(commitment.data().userId, `Your feedback request for the meeting "${commitment.data().description}" was declined by @${msg.from.username}.`);
-          bot.sendMessage(commitment.data().counterpartId, `You have declined the feedback request for the meeting "${commitment.data().description}".`);
-        }
-      } else {
-        bot.sendMessage(chatId, 'Commitment not found.');
-      }
-    } catch (error) {
-      console.error('Error handling callback query:', error);
-      bot.sendMessage(chatId, 'There was an error processing your response. Please try again.');
-    }
   }
 });
 
