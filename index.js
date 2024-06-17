@@ -444,8 +444,8 @@ bot.on('callback_query', async (callbackQuery) => {
                 });
 
                 // Create a commitment
-                const commitmentId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-                await db.collection('commitments').doc(commitmentId).set({
+                const commitmentId = `${Date.now()}${Math.floor((Math.random() * 100)+1)}`;
+                await db.collection('meetingCommitments').doc(commitmentId).set({
                     recruiter_name: request.data().recruiter_name,
                     recruiter_company_name: request.data().recruiter_company_name,
                     recruiter_id: request.data().recruiter_id,
@@ -672,7 +672,7 @@ bot.on('callback_query', async (callbackQuery) => {
           // Check for recruiter and update subscription status
           if (user.data().userType === 'recruiter' && status === 'attended' && user.data().subscription.status === 'free') {
             const expiryDate = new Date();
-            expiryDate.setDate(expiryDate.getDate() + 7);
+            expiryDate.setDate(expiryDate.getDate() + 14);
 
             await userRef.update({
               subscription: {
@@ -681,7 +681,7 @@ bot.on('callback_query', async (callbackQuery) => {
               }
             });
 
-            bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${expiryDate}.`);
+            bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${expiryDate}.`);
 
             // Automatically create feedback request after 2.5 hours
             setTimeout(async () => {
@@ -774,7 +774,7 @@ bot.onText(/\/subscribe/, async (msg) => {
 const sendReminders = async () => {
   console.log('Sending reminders...');
   const now = new Date();
-  const commitments = await db.collection('commitments').where('status', '==', 'pending').get();
+  const commitments = await db.collection('meetingCommitments').where('status', '==', 'pending').get();
 
   commitments.forEach(async (doc) => {
     const commitment = doc.data();
