@@ -63,6 +63,27 @@ bot.on('message', (msg) => {
   console.log(`Message received: ${msg.text}`);
 });
 
+// Define the commands
+const commands = [
+  { command: '/start', description: 'Start the KarmaComet bot' },
+  { command: '/register', description: 'Register as a user' },
+  { command: '/userinfo', description: 'Get user information' },
+  { command: '/meetingstatus', description: 'Get scheduled meetings' },
+  { command: '/feedbackstatus', description: 'Get scheduled feedbacks' },
+  { command: '/subscribe', description: 'Subscribe to the service' },
+  { command: '/setrecruiter', description: 'Switch to a recruiter role.' },
+  { command: '/setjobseeker', description: 'Switch to a job seeker role' },
+];
+
+// Set the bot's commands
+bot.setMyCommands(commands)
+  .then(() => {
+    console.log('Bot commands have been set successfully.');
+  })
+  .catch(err => {
+    console.error('Error setting bot commands:', err);
+  });
+
 // Handle /start command
 bot.onText(/\/start/, (msg) => {
   console.log('/start command received');
