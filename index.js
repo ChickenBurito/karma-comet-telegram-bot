@@ -444,7 +444,7 @@ bot.on('callback_query', async (callbackQuery) => {
                     selected_time_slot: selectedTimeSlot
                 });
 
-                // Create a commitment
+                // Create a meeting commitment
                 const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100)+1)}`;
                 await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
                     recruiter_name: request.data().recruiter_name,
@@ -553,7 +553,6 @@ bot.on('callback_query', async (callbackQuery) => {
           meeting_request_id: meetingRequestId,
           meeting_commitment_id: meetingCommitmentId,
           feedback_planned_at: feedbackDueDate,
-          feedback_scheduled_at: feedback_planned_at,
           recruiter_commitment_fulfilled: null,
           counterpart_commitment_fulfilled: null
         });
@@ -626,9 +625,102 @@ bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
   }
 });
 
-////******************////
+////*************************************////
+// Users, Meetings and Feednack status check
+////************************************////
+
+// Handle /userinfo command
+bot.onText(/\/userinfo/, async (msg) => {
+  console.log('/userinfo command received');
+  const chatId = msg.chat.id;
+
+  try {
+      const userRef = db.collection('users').doc(chatId.toString());
+      const user = await userRef.get();
+
+      if (user.exists) {
+          const userData = user.data();
+          let responseMessage = `Username: ${userData.name}\n`;
+          responseMessage += `Member since: ${userData.registered_at}\n`;
+          responseMessage += `User Type: ${userData.userType}\n`;
+          if (userData.userType === 'recruiter') {
+              responseMessage += `Recruiter Type: ${userData.recruiterType}\n`;
+              if (userData.recruiterType === 'company') {
+                  responseMessage += `Company Name: ${userData.companyName}\n`;
+              }
+          }
+          responseMessage += `Subscription Status: ${userData.subscription.status}\n`;
+          if (userData.subscription.expiry) {
+              responseMessage += `Subscription Expiry: ${userData.subscription.expiry}\n`;
+          }
+          responseMessage += `Score: ${userData.score}\n`;
+
+          bot.sendMessage(chatId, responseMessage);
+      } else {
+          bot.sendMessage(chatId, 'User not found. Please register first using /register.');
+      }
+  } catch (error) {
+      console.error('Error handling /userinfo command:', error);
+      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+  }
+});
+
+// Handle /meetingstatus command
+bot.onText(/\/meetingstatus/, async (msg) => {
+  console.log('/meetingstatus command received');
+  const chatId = msg.chat.id;
+
+  try {
+      const meetingCommitments = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+
+      if (!meetingCommitments.empty) {
+          let responseMessage = 'Scheduled Meetings:\n';
+          meetingCommitments.forEach(doc => {
+              const data = doc.data();
+              responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
+              responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
+              responseMessage += `Meeting Scheduled Time: ${data.meeting_scheduled_at}\n`;
+              responseMessage += `Description: ${data.description}\n\n`;
+          });
+          bot.sendMessage(chatId, responseMessage);
+      } else {
+          bot.sendMessage(chatId, 'No scheduled meetings found.');
+      }
+  } catch (error) {
+      console.error('Error handling /meetingstatus command:', error);
+      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+  }
+});
+
+// Handle /feedbackstatus command
+bot.onText(/\/feedbackstatus/, async (msg) => {
+  console.log('/feedbackstatus command received');
+  const chatId = msg.chat.id;
+
+  try {
+      const feedbackCommitments = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
+
+      if (!feedbackCommitments.empty) {
+          let responseMessage = 'Scheduled Feedbacks:\n';
+          feedbackCommitments.forEach(doc => {
+              const data = doc.data();
+              responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
+              responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
+              responseMessage += `Feedback Due Date: ${data.feedbackDueDate}\n\n`;
+          });
+          bot.sendMessage(chatId, responseMessage);
+      } else {
+          bot.sendMessage(chatId, 'No scheduled feedbacks found.');
+      }
+  } catch (error) {
+      console.error('Error handling /feedbackstatus command:', error);
+      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+  }
+});
+
+////***************************************////
 // Commitment status updates and scoring logic
-////******************////
+////**************************************////
 
 bot.onText(/\/status (\w+)/, async (msg, match) => {
   console.log('/status command received');
@@ -704,39 +796,6 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error updating status:', error);
       bot.sendMessage(chatId, 'There was an error updating the status. Please try again.');
     }
-  }
-});
-
-////******************////
-// Subscription logic
-////******************////  
-
-bot.onText(/\/subscribe/, async (msg) => {
-  console.log('/subscribe command received');
-  const chatId = msg.chat.id;
-  const userRef = db.collection('users').doc(chatId.toString());
-  const user = await userRef.get();
-
-  if (user.exists && user.data().userType === 'recruiter') {
-    try {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [{
-          price: 'price_1PNcuLP9AlrL3WaNIocXw0Ml', // Replace with actual price ID
-          quantity: 1,
-        }],
-        mode: 'subscription',
-        success_url: 'https://your-success-url.com',
-        cancel_url: 'https://your-cancel-url.com',
-      });
-
-      bot.sendMessage(chatId, `Please complete your subscription payment: ${session.url}`);
-    } catch (error) {
-      console.error('Error creating Stripe session:', error);
-      bot.sendMessage(chatId, 'There was an error processing your subscription. Please try again.');
-    }
-  } else {
-    bot.sendMessage(chatId, "Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.");
   }
 });
 
