@@ -398,7 +398,7 @@ bot.on('callback_query', async (callbackQuery) => {
         await requestRef.update({ request_submitted: true });
 
         // Send meeting request to counterpart
-        await bot.sendMessage(counterpart_id, `You have a meeting request from @${msg.from.username}: ${description}. Please choose one of the available time slots:`, {
+        await bot.sendMessage(counterpart_id, `You have a meeting request from @${recruiter_name}: ${description}. Please choose one of the available time slots:`, {
           reply_markup: {
             inline_keyboard: timeslots.map(slot => [
               { text: `${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
@@ -406,7 +406,7 @@ bot.on('callback_query', async (callbackQuery) => {
           }
         });
 
-        bot.sendMessage(chatId, 'Meeting request sent to the counterpart.');
+        bot.sendMessage(chatId, `Meeting request sent to @${counterpart_name}.`);
       } else {
         bot.sendMessage(chatId, 'Meeting request not found.');
       }
@@ -429,45 +429,50 @@ bot.on('callback_query', async (callbackQuery) => {
     const selectedTimeSlot = data.slice(3).join(' ');
 
     try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      const request = await requestRef.get();
+        const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+        const request = await requestRef.get();
 
-      if (request.exists) {
-        const { recruiter_id, counterpart_id } = request.data();
+        if (request.exists) {
+            const { recruiter_id, counterpart_id } = request.data();
 
-        // Update counterpart_accepted to true and add selected time slot
-        await requestRef.update({
-          counterpart_accepted: true,
-          selected_time_slot: selectedTimeSlot
-        });
+            // Ensure selectedTimeSlot is correctly defined
+            if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
+                // Update counterpart_accepted to true and add selected time slot
+                await requestRef.update({
+                    counterpart_accepted: true,
+                    selected_time_slot: selectedTimeSlot
+                });
 
-        // Create a commitment
-        const commitmentId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        await db.collection('commitments').doc(commitmentId).set({
-          recruiter_name: request.data().recruiter_name,
-          recruiter_company_name: request.data().recruiter_company_name,
-          recruiter_id: request.data().recruiter_id,
-          counterpart_id: request.data().counterpart_id,
-          counterpart_name: request.data().counterpart_name,
-          meeting_request_id: meetingRequestId,
-          meeting_id: commitmentId,
-          created_at: request.data().created_at,
-          accepted_at: new Date().toISOString(),
-          meeting_scheduled_at: selectedTimeSlot,
-          description: request.data().description,
-          recruiter_commitment_fulfilled: null,
-          counterpart_commitment_fulfilled: null
-        });
+                // Create a commitment
+                const commitmentId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                await db.collection('commitments').doc(commitmentId).set({
+                    recruiter_name: request.data().recruiter_name,
+                    recruiter_company_name: request.data().recruiter_company_name,
+                    recruiter_id: request.data().recruiter_id,
+                    counterpart_id: request.data().counterpart_id,
+                    counterpart_name: request.data().counterpart_name,
+                    meeting_request_id: meetingRequestId,
+                    meeting_id: commitmentId,
+                    created_at: request.data().created_at,
+                    accepted_at: new Date().toISOString(),
+                    meeting_scheduled_at: selectedTimeSlot,
+                    description: request.data().description,
+                    recruiter_commitment_fulfilled: null,
+                    counterpart_commitment_fulfilled: null
+                });
 
-        // Notify both parties
-        bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
-        bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
-      } else {
-        bot.sendMessage(chatId, 'Meeting request not found.');
-      }
+                // Notify both parties
+                bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+                bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+            } else {
+                bot.sendMessage(chatId, 'Invalid time slot selected.');
+            }
+        } else {
+            bot.sendMessage(chatId, 'Meeting request not found.');
+        }
     } catch (error) {
-      console.error('Error accepting meeting request:', error);
-      bot.sendMessage(chatId, 'There was an error accepting the meeting request. Please try again.');
+        console.error('Error accepting meeting request:', error);
+        bot.sendMessage(chatId, 'There was an error accepting the meeting request. Please try again.');
     }
   } else if (data[0] === 'decline' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
