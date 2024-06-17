@@ -445,15 +445,15 @@ bot.on('callback_query', async (callbackQuery) => {
                 });
 
                 // Create a commitment
-                const commitmentId = `${Date.now()}${Math.floor((Math.random() * 100)+1)}`;
-                await db.collection('meetingCommitments').doc(commitmentId).set({
+                const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100)+1)}`;
+                await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
                     recruiter_name: request.data().recruiter_name,
                     recruiter_company_name: request.data().recruiter_company_name,
                     recruiter_id: request.data().recruiter_id,
                     counterpart_id: request.data().counterpart_id,
                     counterpart_name: request.data().counterpart_name,
                     meeting_request_id: meetingRequestId,
-                    meeting_id: commitmentId,
+                    meeting_commitment_id: meetingCommitmentId,
                     created_at: request.data().created_at,
                     accepted_at: new Date().toISOString(),
                     meeting_scheduled_at: selectedTimeSlot,
@@ -472,15 +472,20 @@ bot.on('callback_query', async (callbackQuery) => {
                     const commitment = await commitmentRef.get();
 
                     if (commitment.exists) {
-                        const feedbackRequestId = `feedback_${commitmentId}`;
+                        const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000)+1)}`;
                         const feedbackDueDate = new Date();
                         feedbackDueDate.setHours(feedbackDueDate.getHours() + 2.5);
 
                         await db.collection('feedbackRequests').doc(feedbackRequestId).set({
-                            commitment_id: commitmentId,
+                            feedback_request_id: feedbackRequestId,
                             recruiter_id: recruiter_id,
+                            recruiter_name: recruiterName,
                             counterpart_id: counterpart_id,
+                            counterpart_name: counterpartName,
+                            feedback_created_at: new Date().toISOString(),
                             feedback_due_date: feedbackDueDate.toISOString(),
+                            meeting_request_id: meetingRequestId,
+                            meeting_commitment_id: meetingCommitmentId,
                             feedback_planned_at: null,
                             feedback_submitted: false
                         });
@@ -532,16 +537,21 @@ bot.on('callback_query', async (callbackQuery) => {
       const feedbackRequest = await feedbackRequestRef.get();
 
       if (feedbackRequest.exists) {
-        const { commitment_id, counterpart_id, feedback_planned_at } = feedbackRequest.data();
+        const { feedbackRequestId, counterpart_id, recruiterName, counterpartName, meetingRequestId, meetingCommitmentId, feedback_planned_at } = feedbackRequest.data();
 
         await feedbackRequestRef.update({ feedback_planned_at: feedbackDueDate, feedback_submitted: true });
 
         // Create feedback commitment
-        const feedbackCommitmentId = `feedback_commitment_${commitment_id}`;
+        const feedbackCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100)+1)}`;
         await db.collection('feedbackCommitments').doc(feedbackCommitmentId).set({
-          commitment_id: commitment_id,
+          feedback_commitment_id: feedbackCommitmentId,
+          feedback_request_id: feedbackRequestId,
           recruiter_id: feedbackRequest.data().recruiter_id,
+          recruiter_name: recruiterName,
           counterpart_id: counterpart_id,
+          counterpart_name: counterpartName,
+          meeting_request_id: meetingRequestId,
+          meeting_commitment_id: meetingCommitmentId,
           feedback_planned_at: feedbackDueDate,
           feedback_scheduled_at: feedback_planned_at,
           recruiter_commitment_fulfilled: null,
