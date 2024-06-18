@@ -72,6 +72,7 @@ const commands = [
   { command: '/meetingstatus', description: 'Get scheduled meetings' },
   { command: '/meetinghistory', description: 'Get past meetings' },
   { command: '/feedbackstatus', description: 'Get scheduled feedbacks' },
+  { command: '/feedbackhistory', description: 'Get past feedbacks' },
   { command: '/subscribe', description: 'Subscribe to the service' },
   { command: '/setrecruiter', description: 'Switch to a recruiter role.' },
   { command: '/setjobseeker', description: 'Switch to a job seeker role' },
@@ -114,6 +115,8 @@ bot.onText(/\/start/, (msg) => {
   - **/userinfo**: Check your user profile.
   - **/meetingstatus**: See full list of scheduled meetings.
   - **/feedbackstatus**: See full list of pending feedbacks.
+  - **/meetinghistory**: See full list of past meetings.
+  - **/feedbackhistory**: See full list of past feedbacks.
   - **/subscribe**: Subscribe to premium recruiter services.
   
   KarmaComet Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!`;
@@ -722,44 +725,44 @@ bot.onText(/\/meetingstatus/, async (msg) => {
   const now = new Date();
 
   try {
-      // Retrieve meeting commitments where the user is either the recruiter or the job seeker
-      const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
-      const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+    // Retrieve meeting commitments where the user is either the recruiter or the job seeker
+    const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
-      const upcomingMeetings = [];
-      recruiterMeetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime > now.setHours(now.getHours() - 2)) {
-              upcomingMeetings.push(data);
-          }
-      });
-
-      jobSeekerMeetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime > now.setHours(now.getHours() - 2)) {
-              upcomingMeetings.push(data);
-          }
-      });
-
-      upcomingMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
-
-      if (upcomingMeetings.length > 0) {
-          let responseMessage = 'Scheduled Meetings:\n';
-          upcomingMeetings.forEach((meeting, index) => {
-              responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
-              responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
-              responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
-              responseMessage += `   Description: ${meeting.description}\n\n`;
-          });
-          bot.sendMessage(chatId, responseMessage);
-      } else {
-          bot.sendMessage(chatId, 'No upcoming meetings found.');
+    const upcomingMeetings = [];
+    recruiterMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = new Date(data.meeting_scheduled_at);
+      if (meetingTime > now && (meetingTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+        upcomingMeetings.push(data);
       }
+    });
+
+    jobSeekerMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = new Date(data.meeting_scheduled_at);
+      if (meetingTime > now && (meetingTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+        upcomingMeetings.push(data);
+      }
+    });
+
+    upcomingMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
+
+    if (upcomingMeetings.length > 0) {
+      let responseMessage = 'Scheduled Meetings:\n';
+      upcomingMeetings.forEach((meeting, index) => {
+        responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
+        responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
+        responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
+        responseMessage += `   Description: ${meeting.description}\n\n`;
+      });
+      bot.sendMessage(chatId, responseMessage);
+    } else {
+      bot.sendMessage(chatId, 'No upcoming meetings found.');
+    }
   } catch (error) {
-      console.error('Error handling /meetingstatus command:', error);
-      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    console.error('Error handling /meetingstatus command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
 
@@ -770,44 +773,44 @@ bot.onText(/\/meetinghistory/, async (msg) => {
   const now = new Date();
 
   try {
-      // Retrieve meeting commitments where the user is either the recruiter or the job seeker
-      const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
-      const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+    // Retrieve meeting commitments where the user is either the recruiter or the job seeker
+    const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
-      const pastMeetings = [];
-      recruiterMeetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime <= now.setHours(now.getHours() - 2)) {
-              pastMeetings.push(data);
-          }
-      });
-
-      jobSeekerMeetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime <= now.setHours(now.getHours() - 2)) {
-              pastMeetings.push(data);
-          }
-      });
-
-      pastMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
-
-      if (pastMeetings.length > 0) {
-          let responseMessage = 'Meeting History:\n';
-          pastMeetings.forEach((meeting, index) => {
-              responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
-              responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
-              responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
-              responseMessage += `   Description: ${meeting.description}\n\n`;
-          });
-          bot.sendMessage(chatId, responseMessage);
-      } else {
-          bot.sendMessage(chatId, 'No past meetings found.');
+    const pastMeetings = [];
+    recruiterMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = new Date(data.meeting_scheduled_at);
+      if (meetingTime <= now && (now - meetingTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+        pastMeetings.push(data);
       }
+    });
+
+    jobSeekerMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = new Date(data.meeting_scheduled_at);
+      if (meetingTime <= now && (now - meetingTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+        pastMeetings.push(data);
+      }
+    });
+
+    pastMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
+
+    if (pastMeetings.length > 0) {
+      let responseMessage = 'Meeting History:\n';
+      pastMeetings.forEach((meeting, index) => {
+        responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
+        responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
+        responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
+        responseMessage += `   Description: ${meeting.description}\n\n`;
+      });
+      bot.sendMessage(chatId, responseMessage);
+    } else {
+      bot.sendMessage(chatId, 'No past meetings found.');
+    }
   } catch (error) {
-      console.error('Error handling /meetinghistory command:', error);
-      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    console.error('Error handling /meetinghistory command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
 
@@ -815,25 +818,93 @@ bot.onText(/\/meetinghistory/, async (msg) => {
 bot.onText(/\/feedbackstatus/, async (msg) => {
   console.log('/feedbackstatus command received');
   const chatId = msg.chat.id;
+  const now = new Date();
 
   try {
-      const feedbackCommitments = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
+    // Retrieve feedback commitments where the user is either the recruiter or the job seeker
+    const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerFeedbacks = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId).get();
 
-      if (!feedbackCommitments.empty) {
-          let responseMessage = 'Scheduled Feedbacks:\n';
-          feedbackCommitments.forEach(doc => {
-              const data = doc.data();
-              responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
-              responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
-              responseMessage += `Feedback Due Date: ${data.feedback_planned_at}\n\n`;
-          });
-          bot.sendMessage(chatId, responseMessage);
-      } else {
-          bot.sendMessage(chatId, 'No scheduled feedbacks found.');
+    const upcomingFeedbacks = [];
+    recruiterFeedbacks.forEach(doc => {
+      const data = doc.data();
+      const feedbackTime = new Date(data.feedback_scheduled_at);
+      if (feedbackTime > now && (feedbackTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+        upcomingFeedbacks.push(data);
       }
+    });
+
+    jobSeekerFeedbacks.forEach(doc => {
+      const data = doc.data();
+      const feedbackTime = new Date(data.feedback_scheduled_at);
+      if (feedbackTime > now && (feedbackTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+        upcomingFeedbacks.push(data);
+      }
+    });
+
+    upcomingFeedbacks.sort((a, b) => new Date(a.feedback_scheduled_at) - new Date(b.feedback_scheduled_at));
+
+    if (upcomingFeedbacks.length > 0) {
+      let responseMessage = 'Scheduled Feedbacks:\n';
+      upcomingFeedbacks.forEach((feedback, index) => {
+        responseMessage += `${index + 1}. Job Seeker Name: ${feedback.counterpart_name}\n`;
+        responseMessage += `   Recruiter Name: ${feedback.recruiter_name}\n`;
+        responseMessage += `   Feedback Scheduled Time: ${feedback.feedback_scheduled_at}\n\n`;
+      });
+      bot.sendMessage(chatId, responseMessage);
+    } else {
+      bot.sendMessage(chatId, 'No upcoming feedbacks found.');
+    }
   } catch (error) {
-      console.error('Error handling /feedbackstatus command:', error);
-      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    console.error('Error handling /feedbackstatus command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+  }
+});
+
+// Handle /feedbackhistory command
+bot.onText(/\/feedbackhistory/, async (msg) => {
+  console.log('/feedbackhistory command received');
+  const chatId = msg.chat.id;
+  const now = new Date();
+
+  try {
+    // Retrieve feedback commitments where the user is either the recruiter or the job seeker
+    const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerFeedbacks = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId).get();
+
+    const pastFeedbacks = [];
+    recruiterFeedbacks.forEach(doc => {
+      const data = doc.data();
+      const feedbackTime = new Date(data.feedback_scheduled_at);
+      if (feedbackTime <= now && (now - feedbackTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+        pastFeedbacks.push(data);
+      }
+    });
+
+    jobSeekerFeedbacks.forEach(doc => {
+      const data = doc.data();
+      const feedbackTime = new Date(data.feedback_scheduled_at);
+      if (feedbackTime <= now && (now - feedbackTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+        pastFeedbacks.push(data);
+      }
+    });
+
+    pastFeedbacks.sort((a, b) => new Date(a.feedback_scheduled_at) - new Date(b.feedback_scheduled_at));
+
+    if (pastFeedbacks.length > 0) {
+      let responseMessage = 'Feedback History:\n';
+      pastFeedbacks.forEach((feedback, index) => {
+        responseMessage += `${index + 1}. Job Seeker Name: ${feedback.counterpart_name}\n`;
+        responseMessage += `   Recruiter Name: ${feedback.recruiter_name}\n`;
+        responseMessage += `   Feedback Scheduled Time: ${feedback.feedback_scheduled_at}\n\n`;
+      });
+      bot.sendMessage(chatId, responseMessage);
+    } else {
+      bot.sendMessage(chatId, 'No past feedbacks found.');
+    }
+  } catch (error) {
+    console.error('Error handling /feedbackhistory command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
 
