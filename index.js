@@ -733,7 +733,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     recruiterMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = new Date(data.meeting_scheduled_at);
-      if (meetingTime > now && (meetingTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+      if (meetingTime > now) {
         upcomingMeetings.push(data);
       }
     });
@@ -741,7 +741,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     jobSeekerMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = new Date(data.meeting_scheduled_at);
-      if (meetingTime > now && (meetingTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+      if (meetingTime > now) {
         upcomingMeetings.push(data);
       }
     });
@@ -781,7 +781,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     recruiterMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = new Date(data.meeting_scheduled_at);
-      if (meetingTime <= now && (now - meetingTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+      if (meetingTime <= now) {
         pastMeetings.push(data);
       }
     });
@@ -789,7 +789,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     jobSeekerMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = new Date(data.meeting_scheduled_at);
-      if (meetingTime <= now && (now - meetingTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+      if (meetingTime <= now) {
         pastMeetings.push(data);
       }
     });
@@ -829,7 +829,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
     recruiterFeedbacks.forEach(doc => {
       const data = doc.data();
       const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime > now && (feedbackTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+      if (feedbackTime > now) {
         upcomingFeedbacks.push(data);
       }
     });
@@ -837,7 +837,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
     jobSeekerFeedbacks.forEach(doc => {
       const data = doc.data();
       const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime > now && (feedbackTime - now) <= 2 * 60 * 60 * 1000) { // 2 hours from now
+      if (feedbackTime > now) {
         upcomingFeedbacks.push(data);
       }
     });
@@ -876,7 +876,7 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
     recruiterFeedbacks.forEach(doc => {
       const data = doc.data();
       const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime <= now && (now - feedbackTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+      if (feedbackTime <= now) {
         pastFeedbacks.push(data);
       }
     });
@@ -884,7 +884,7 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
     jobSeekerFeedbacks.forEach(doc => {
       const data = doc.data();
       const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime <= now && (now - feedbackTime) > 2 * 60 * 60 * 1000) { // More than 2 hours ago
+      if (feedbackTime <= now) {
         pastFeedbacks.push(data);
       }
     });
