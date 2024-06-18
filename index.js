@@ -68,8 +68,9 @@ const commands = [
   { command: '/start', description: 'Start the KarmaComet bot' },
   { command: '/register', description: 'Register as a user' },
   { command: '/meeting', description: 'To schedule a meeting add @username and description' },
-  { command: '/userinfo', description: 'Get user information' },
+  { command: '/userinfo', description: 'See user profile' },
   { command: '/meetingstatus', description: 'Get scheduled meetings' },
+  { command: '/meetinghistory', description: 'Get past meetings' },
   { command: '/feedbackstatus', description: 'Get scheduled feedbacks' },
   { command: '/subscribe', description: 'Subscribe to the service' },
   { command: '/setrecruiter', description: 'Switch to a recruiter role.' },
@@ -718,37 +719,94 @@ bot.onText(/\/userinfo/, async (msg) => {
 bot.onText(/\/meetingstatus/, async (msg) => {
   console.log('/meetingstatus command received');
   const chatId = msg.chat.id;
+  const now = new Date();
 
   try {
       // Retrieve meeting commitments where the user is either the recruiter or the job seeker
       const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
       const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
-      if (!recruiterMeetings.empty || !jobSeekerMeetings.empty) {
+      const upcomingMeetings = [];
+      recruiterMeetings.forEach(doc => {
+          const data = doc.data();
+          const meetingTime = new Date(data.meeting_scheduled_at);
+          if (meetingTime > now.setHours(now.getHours() - 2)) {
+              upcomingMeetings.push(data);
+          }
+      });
+
+      jobSeekerMeetings.forEach(doc => {
+          const data = doc.data();
+          const meetingTime = new Date(data.meeting_scheduled_at);
+          if (meetingTime > now.setHours(now.getHours() - 2)) {
+              upcomingMeetings.push(data);
+          }
+      });
+
+      upcomingMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
+
+      if (upcomingMeetings.length > 0) {
           let responseMessage = 'Scheduled Meetings:\n';
-
-          recruiterMeetings.forEach(doc => {
-              const data = doc.data();
-              responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
-              responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
-              responseMessage += `Meeting Scheduled Time: ${data.meeting_scheduled_at}\n`;
-              responseMessage += `Description: ${data.description}\n\n`;
+          upcomingMeetings.forEach((meeting, index) => {
+              responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
+              responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
+              responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
+              responseMessage += `   Description: ${meeting.description}\n\n`;
           });
-
-          jobSeekerMeetings.forEach(doc => {
-              const data = doc.data();
-              responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
-              responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
-              responseMessage += `Meeting Scheduled Time: ${data.meeting_scheduled_at}\n`;
-              responseMessage += `Description: ${data.description}\n\n`;
-          });
-
           bot.sendMessage(chatId, responseMessage);
       } else {
-          bot.sendMessage(chatId, 'No scheduled meetings found.');
+          bot.sendMessage(chatId, 'No upcoming meetings found.');
       }
   } catch (error) {
       console.error('Error handling /meetingstatus command:', error);
+      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+  }
+});
+
+// Handle /meetinghistory command
+bot.onText(/\/meetinghistory/, async (msg) => {
+  console.log('/meetinghistory command received');
+  const chatId = msg.chat.id;
+  const now = new Date();
+
+  try {
+      // Retrieve meeting commitments where the user is either the recruiter or the job seeker
+      const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+      const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+
+      const pastMeetings = [];
+      recruiterMeetings.forEach(doc => {
+          const data = doc.data();
+          const meetingTime = new Date(data.meeting_scheduled_at);
+          if (meetingTime <= now.setHours(now.getHours() - 2)) {
+              pastMeetings.push(data);
+          }
+      });
+
+      jobSeekerMeetings.forEach(doc => {
+          const data = doc.data();
+          const meetingTime = new Date(data.meeting_scheduled_at);
+          if (meetingTime <= now.setHours(now.getHours() - 2)) {
+              pastMeetings.push(data);
+          }
+      });
+
+      pastMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
+
+      if (pastMeetings.length > 0) {
+          let responseMessage = 'Meeting History:\n';
+          pastMeetings.forEach((meeting, index) => {
+              responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
+              responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
+              responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
+              responseMessage += `   Description: ${meeting.description}\n\n`;
+          });
+          bot.sendMessage(chatId, responseMessage);
+      } else {
+          bot.sendMessage(chatId, 'No past meetings found.');
+      }
+  } catch (error) {
+      console.error('Error handling /meetinghistory command:', error);
       bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
