@@ -942,47 +942,59 @@ bot.onText(/\/subscribe/, async (msg) => {
 //  Send reminders logic
 ////******************////
 
-const sendReminders = async () => {
-  console.log('Sending reminders...');
-  const now = new Date();
-  const commitments = await db.collection('meetingCommitments').where('status', '==', 'pending').get();
+const schedule = require('node-schedule');
 
-  commitments.forEach(async (doc) => {
-    const commitment = doc.data();
-    const commitmentDate = new Date(`${commitment.date} ${commitment.time}`);
+// Function to send meeting reminders
+const sendMeetingReminders = async () => {
+    console.log('Sending meeting reminders...');
+    const now = new Date();
+    const meetings = await db.collection('meetingCommitments').get();
 
-    // Reminder 24 hours before
-    if (commitmentDate > now && (commitmentDate - now) <= 24 * 60 * 60 * 1000) {
-      bot.sendMessage(commitment.userId, `Reminder: You have a commitment "${commitment.description}" on ${commitment.date} at ${commitment.time}.`);
-      bot.sendMessage(commitment.counterpartId, `Reminder: You have a commitment "${commitment.description}" on ${commitment.date} at ${commitment.time}.`);
-    }
+    meetings.forEach(async (doc) => {
+        const meeting = doc.data();
+        const meetingDate = new Date(meeting.meeting_scheduled_at);
 
-    // Reminder 1 hour before
-    if (commitmentDate > now && (commitmentDate - now) <= 1 * 60 * 60 * 1000) {
-      bot.sendMessage(commitment.userId, `Reminder: Your commitment "${commitment.description}" is happening in 1 hour at ${commitment.time}.`);
-      bot.sendMessage(commitment.counterpartId, `Reminder: Your commitment "${commitment.description}" is happening in 1 hour at ${commitment.time}.`);
-    }
+        // Reminder 24 hours before
+        if (meetingDate > now && (meetingDate - now) <= 24 * 60 * 60 * 1000) {
+            bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+            bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+        }
 
-    // Additional reminders for feedback commitments
-    if (commitment.type === 'feedback') {
-      const feedbackDueDate = new Date(commitment.date);
-
-      // Reminder 24 hours before feedback due
-      if (feedbackDueDate > now && (feedbackDueDate - now) <= 24 * 60 * 60 * 1000) {
-        bot.sendMessage(commitment.userId, `Reminder: Your feedback for "${commitment.description}" is due on ${commitment.date}.`);
-        bot.sendMessage(commitment.counterpartId, `Reminder: Feedback for "${commitment.description}" is due on ${commitment.date}.`);
-      }
-
-      // Reminder 1 hour before feedback due
-      if (feedbackDueDate > now && (feedbackDueDate - now) <= 1 * 60 * 60 * 1000) {
-        bot.sendMessage(commitment.userId, `Reminder: Your feedback for "${commitment.description}" is due in 1 hour at ${commitment.time}.`);
-        bot.sendMessage(commitment.counterpartId, `Reminder: Feedback for "${commitment.description}" is due in 1 hour at ${commitment.time}.`);
-      }
-    }
-  });
+        // Reminder 1 hour before
+        if (meetingDate > now && (meetingDate - now) <= 1 * 60 * 60 * 1000) {
+            bot.sendMessage(meeting.recruiter_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.counterpart_name} is happening in 1 hour.`);
+            bot.sendMessage(meeting.counterpart_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.recruiter_name} is happening in 1 hour.`);
+        }
+    });
 };
 
-schedule.scheduleJob('0 * * * *', sendReminders); // Run every hour
+// Function to send feedback reminders
+const sendFeedbackReminders = async () => {
+    console.log('Sending feedback reminders...');
+    const now = new Date();
+    const feedbacks = await db.collection('feedbackCommitments').get();
+
+    feedbacks.forEach(async (doc) => {
+        const feedback = doc.data();
+        const feedbackDate = new Date(feedback.feedback_scheduled_at);
+
+        // Reminder 24 hours before
+        if (feedbackDate > now && (feedbackDate - now) <= 24 * 60 * 60 * 1000) {
+            bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedback.feedback_scheduled_at}.`);
+            bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedback.feedback_scheduled_at}.`);
+        }
+
+        // Reminder 1 hour before
+        if (feedbackDate > now && (feedbackDate - now) <= 1 * 60 * 60 * 1000) {
+            bot.sendMessage(feedback.recruiter_id, `Reminder: Your feedback for the meeting with ${feedback.counterpart_name} is due in 1 hour.`);
+            bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name}'s feedback for your meeting is due in 1 hour.`);
+        }
+    });
+};
+
+// Schedule the reminder functions to run every hour
+schedule.scheduleJob('0 * * * *', sendMeetingReminders);
+schedule.scheduleJob('0 * * * *', sendFeedbackReminders);
 
 // Express app setup
 const app = express();
