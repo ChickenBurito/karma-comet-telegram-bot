@@ -8,7 +8,7 @@ const schedule = require('node-schedule');
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Check required environment variables
-const requiredEnvVars = ['STRIPE_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY'];
+const requiredEnvVars = ['STRIPE_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'BOT_URL'];
 
 requiredEnvVars.forEach((key) => {
   if (!process.env[key]) {
@@ -42,6 +42,10 @@ try {
 }
 
 const db = admin.firestore();
+
+// Express app setup
+const app = express();
+app.use(bodyParser.raw({ type: 'application/json' })); // Stripe requires the raw body to construct the event
 
 // Telegram bot token from BotFather
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -1320,10 +1324,6 @@ const sendFeedbackReminders = async () => {
 // Schedule the reminder functions to run every hour
 schedule.scheduleJob('0 * * * *', sendMeetingReminders);
 schedule.scheduleJob('0 * * * *', sendFeedbackReminders);
-
-// Express app setup
-const app = express();
-app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
   res.send('Yay! KarmaComet is up and running!');
