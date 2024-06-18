@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 const schedule = require('node-schedule');
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Check required environment variables
 const requiredEnvVars = ['STRIPE_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY'];
@@ -1031,6 +1032,51 @@ bot.on('callback_query', async (callbackQuery) => {
 // Subscription logic
 ////******************////  
 
+// Webhook endpoint
+app.post('/webhook', (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'customer.subscription.created':
+    case 'customer.subscription.updated':
+      handleSubscriptionUpdate(event.data.object);
+      break;
+    case 'customer.subscription.deleted':
+      handleSubscriptionCancellation(event.data.object);
+      break;
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  res.status(200).json({ received: true });
+});
+
+// Function to handle subscription updates
+const handleSubscriptionUpdate = async (subscription) => {
+  const userRef = db.collection('users').doc(subscription.customer);
+  await userRef.update({
+    'subscription.status': subscription.status,
+    'subscription.expiry': new Date(subscription.current_period_end * 1000).toISOString()
+  });
+};
+
+// Function to handle subscription cancellations
+const handleSubscriptionCancellation = async (subscription) => {
+  const userRef = db.collection('users').doc(subscription.customer);
+  await userRef.update({
+    'subscription.status': 'canceled',
+    'subscription.expiry': null
+  });
+};
+
 // Creating a Stripe checkout session for recruiters
 const createCheckoutSession = async (priceId, chatId) => {
   try {
@@ -1042,15 +1088,19 @@ const createCheckoutSession = async (priceId, chatId) => {
           quantity: 1
         }
       ],
-      mode: 'subscription'
+      mode: 'subscription',
+      success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.BOT_URL}/cancel`
     });
 
     const userRef = db.collection('users').doc(chatId.toString());
     await userRef.update({
-      stripeCustomerId: session.customer
+      stripeCustomerId: session.customer,
+      'subscription.status': 'active',
+      'subscription.expiry': new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() // Set expiry date to 14 days from now
     });
 
-    return session.id;
+    return session.url;
   } catch (error) {
     console.error('Error creating checkout session:', error);
     throw new Error('Internal Server Error');
@@ -1085,42 +1135,96 @@ bot.onText(/\/subscribe/, async (msg) => {
   const user = await userRef.get();
 
   if (user.exists && user.data().userType === 'recruiter') {
-    try {
-      const sessionId = await createCheckoutSession('price_1PNcuLP9AlrL3WaNIocXw0Ml', chatId);
-      bot.sendMessage(chatId, `Please complete your subscription payment using this session ID: ${sessionId}`);
-    } catch (error) {
-      console.error('Error creating Stripe session:', error);
-      bot.sendMessage(chatId, 'There was an error processing your subscription. Please try again.');
-    }
+    const opts = {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: 'Subscribe Yearly (99 EUR)', callback_data: 'subscribe_yearly' },
+            { text: 'Subscribe Monthly (15 EUR)', callback_data: 'subscribe_monthly' }
+          ],
+          [
+            { text: 'Unsubscribe', callback_data: 'unsubscribe' }
+          ]
+        ]
+      }
+    };
+    bot.sendMessage(chatId, 'Please choose your subscription plan:', opts);
   } else {
     bot.sendMessage(chatId, "Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.");
   }
 });
 
+// Handle button presses for subscription options
+bot.on('callback_query', async (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
+  const userRef = db.collection('users').doc(chatId.toString());
+  const user = await userRef.get();
+  
+  if (!user.exists || user.data().userType !== 'recruiter') {
+    bot.sendMessage(chatId, 'Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.');
+    return;
+  }
+
+  let priceId;
+  if (callbackQuery.data === 'subscribe_yearly') {
+    priceId = 'price_1PT8hBP9AlrL3WaNuwqClhBs';
+  } else if (callbackQuery.data === 'subscribe_monthly') {
+    priceId = 'price_1PT87KP9AlrL3WaNK4UsnChE';
+  } else if (callbackQuery.data === 'unsubscribe') {
+    // Handle unsubscribe logic here
+    await handleUnsubscribe(user.data().stripeCustomerId);
+    await userRef.update({
+      'subscription.status': 'canceled',
+      'subscription.expiry': null
+    });
+    bot.sendMessage(chatId, 'Your subscription has been canceled.');
+    return;
+  }
+
+  if (priceId) {
+    try {
+      const sessionUrl = await createCheckoutSession(priceId, chatId);
+      bot.sendMessage(chatId, `Please complete your subscription payment using this link: ${sessionUrl}`);
+    } catch (error) {
+      console.error('Error creating Stripe session:', error);
+      bot.sendMessage(chatId, 'There was an error processing your subscription. Please try again.');
+    }
+  }
+});
+
+// Function to handle unsubscribe
+const handleUnsubscribe = async (customerId) => {
+  const subscriptions = await stripe.subscriptions.list({ customer: customerId });
+  if (subscriptions.data.length > 0) {
+    await stripe.subscriptions.del(subscriptions.data[0].id);
+  }
+};
+
 // Middleware to check subscription status
 const checkSubscription = async (req, res, next) => {
-  const chatId = req.body.message.chat.id.toString();
-  const userRef = db.collection('users').doc(chatId);
-  const userDoc = await userRef.get();
+  if (req.body.message) {
+    const chatId = req.body.message.chat.id.toString();
+    const userRef = db.collection('users').doc(chatId);
+    const userDoc = await userRef.get();
 
-  if (userDoc.exists) {
-    const user = userDoc.data();
-    if (user.userType === 'recruiter') {
-      const now = new Date();
-      if (user.subscription.status === 'trial') {
+    if (userDoc.exists) {
+      const user = userDoc.data();
+      if (user.userType === 'recruiter') {
+        const now = new Date();
         const expiryDate = new Date(user.subscription.expiry);
-        if (now >= expiryDate) {
+
+        if (user.subscription.status === 'trial' && now >= expiryDate) {
           await userRef.update({
             'subscription.status': 'expired'
           });
           bot.sendMessage(chatId, 'Your trial period has expired. Please subscribe to continue using the service.');
-        }
-      } else if (user.subscription.status === 'expired') {
-        const allowedCommands = ['/start', '/userinfo', '/setrecruiter', '/setjobseeker', '/subscribe'];
-        const command = req.body.message.text.split(' ')[0];
-        if (!allowedCommands.includes(command)) {
-          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
-          return;
+        } else if (user.subscription.status === 'expired') {
+          const allowedCommands = ['/start', '/userinfo', '/setrecruiter', '/setjobseeker', '/subscribe'];
+          const command = req.body.message.text.split(' ')[0];
+          if (!allowedCommands.includes(command)) {
+            bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+            return;
+          }
         }
       }
     }
@@ -1133,20 +1237,20 @@ app.use(checkSubscription);
 
 // Schedule the function to check subscription status every day
 schedule.scheduleJob('0 0 * * *', async () => {
-  const now = new Date();
+  console.log('Checking trial periods...');
   const usersRef = db.collection('users');
   const usersSnapshot = await usersRef.where('userType', '==', 'recruiter').get();
 
   usersSnapshot.forEach(async (userDoc) => {
     const user = userDoc.data();
-    if (user.subscription.status === 'trial') {
-      const expiryDate = new Date(user.subscription.expiry);
-      if (now >= expiryDate) {
-        await usersRef.doc(userDoc.id).update({
-          'subscription.status': 'expired'
-        });
-        bot.sendMessage(userDoc.id, 'Your trial period has expired. Please subscribe to continue using the service.');
-      }
+    const expiryDate = new Date(user.subscription.expiry);
+    const now = new Date();
+
+    if (user.subscription.status === 'trial' && now >= expiryDate) {
+      await usersRef.doc(userDoc.id).update({
+        'subscription.status': 'expired'
+      });
+      bot.sendMessage(userDoc.id, 'Your trial period has expired. Please subscribe to continue using the service.');
     }
   });
 });
