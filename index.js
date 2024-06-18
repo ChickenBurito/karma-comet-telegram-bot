@@ -1014,50 +1014,60 @@ bot.onText(/\/subscribe/, async (msg) => {
 
 // Function to send meeting reminders
 const sendMeetingReminders = async () => {
-    console.log('Sending meeting reminders...');
-    const now = new Date();
-    const meetings = await db.collection('meetingCommitments').get();
+  console.log('Sending meeting reminders...');
+  const now = new Date();
+  const meetings = await db.collection('meetingCommitments').get();
 
-    meetings.forEach(async (doc) => {
-        const meeting = doc.data();
-        const meetingDate = new Date(meeting.meeting_scheduled_at);
+  meetings.forEach(async (doc) => {
+      const meeting = doc.data();
+      const meetingDate = new Date(meeting.meeting_scheduled_at);
 
-        // Reminder 24 hours before
-        if (meetingDate > now && (meetingDate - now) <= 24 * 60 * 60 * 1000) {
-            bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meeting.meeting_scheduled_at}.`);
-            bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meeting.meeting_scheduled_at}.`);
-        }
+      // Skip past meetings
+      if (meetingDate <= now) {
+          return;
+      }
 
-        // Reminder 1 hour before
-        if (meetingDate > now && (meetingDate - now) <= 1 * 60 * 60 * 1000) {
-            bot.sendMessage(meeting.recruiter_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.counterpart_name} is happening in 1 hour.`);
-            bot.sendMessage(meeting.counterpart_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.recruiter_name} is happening in 1 hour.`);
-        }
-    });
+      // Reminder 24 hours before
+      if ((meetingDate - now) <= 24 * 60 * 60 * 1000 && (meetingDate - now) > 23 * 60 * 60 * 1000) {
+          bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+          bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+      }
+
+      // Reminder 1 hour before
+      if ((meetingDate - now) <= 1 * 60 * 60 * 1000 && (meetingDate - now) > 59 * 60 * 1000) {
+          bot.sendMessage(meeting.recruiter_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.counterpart_name} is happening in 1 hour.`);
+          bot.sendMessage(meeting.counterpart_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.recruiter_name} is happening in 1 hour.`);
+      }
+  });
 };
 
 // Function to send feedback reminders
 const sendFeedbackReminders = async () => {
-    console.log('Sending feedback reminders...');
-    const now = new Date();
-    const feedbacks = await db.collection('feedbackCommitments').get();
+  console.log('Sending feedback reminders...');
+  const now = new Date();
+  const feedbacks = await db.collection('feedbackCommitments').get();
 
-    feedbacks.forEach(async (doc) => {
-        const feedback = doc.data();
-        const feedbackDate = new Date(feedback.feedback_scheduled_at);
+  feedbacks.forEach(async (doc) => {
+      const feedback = doc.data();
+      const feedbackDate = new Date(feedback.feedback_scheduled_at);
 
-        // Reminder 24 hours before
-        if (feedbackDate > now && (feedbackDate - now) <= 24 * 60 * 60 * 1000) {
-            bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedback.feedback_scheduled_at}.`);
-            bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedback.feedback_scheduled_at}.`);
-        }
+      // Skip past feedbacks
+      if (feedbackDate <= now) {
+          return;
+      }
 
-        // Reminder 1 hour before
-        if (feedbackDate > now && (feedbackDate - now) <= 1 * 60 * 60 * 1000) {
-            bot.sendMessage(feedback.recruiter_id, `Reminder: Your feedback for the meeting with ${feedback.counterpart_name} is due in 1 hour.`);
-            bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name}'s feedback for your meeting is due in 1 hour.`);
-        }
-    });
+      // Reminder 24 hours before
+      if ((feedbackDate - now) <= 24 * 60 * 60 * 1000 && (feedbackDate - now) > 23 * 60 * 60 * 1000) {
+          bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedback.feedback_scheduled_at}.`);
+          bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedback.feedback_scheduled_at}.`);
+      }
+
+      // Reminder 1 hour before
+      if ((feedbackDate - now) <= 1 * 60 * 60 * 1000 && (feedbackDate - now) > 59 * 60 * 1000) {
+          bot.sendMessage(feedback.recruiter_id, `Reminder: Your feedback for the meeting with ${feedback.counterpart_name} is due in 1 hour.`);
+          bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name}'s feedback for your meeting is due in 1 hour.`);
+      }
+  });
 };
 
 // Schedule the reminder functions to run every hour
