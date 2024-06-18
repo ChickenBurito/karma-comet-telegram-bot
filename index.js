@@ -942,8 +942,6 @@ bot.onText(/\/subscribe/, async (msg) => {
 //  Send reminders logic
 ////******************////
 
-const schedule = require('node-schedule');
-
 // Function to send meeting reminders
 const sendMeetingReminders = async () => {
     console.log('Sending meeting reminders...');
