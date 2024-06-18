@@ -97,7 +97,7 @@ bot.onText(/\/start/, (msg) => {
   const description = `
  I am KarmaComet Bot!
 
- The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. I ensure that all parties stay true to their commitments, helping everyone save time and money.
+ 🌏 The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. I ensure that all parties stay true to their commitments, helping everyone save time and money.
   
   🌟 Key Features:
   🟢 Accountability: Ensures both job seekers and recruiters keep their promises.
@@ -912,25 +912,6 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
 // Commitment status updates and scoring logic
 ////**************************************////
 
-bot.onText(/\/status (\w+)/, async (msg, match) => {
-  console.log('/status command received');
-  const chatId = msg.chat.id;
-  const commitmentId = match[1];
-
-  const opts = {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: 'Attended', callback_data: `status_${commitmentId}_attended` },
-          { text: 'Missed', callback_data: `status_${commitmentId}_missed` }
-        ]
-      ]
-    }
-  };
-
-  bot.sendMessage(chatId, 'Update your commitment status:', opts);
-});
-
 // Handle button callbacks for commitment status
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
@@ -1050,6 +1031,53 @@ bot.on('callback_query', async (callbackQuery) => {
 // Subscription logic
 ////******************////  
 
+// Creating a Stripe checkout session for recruiters
+const createCheckoutSession = async (priceId, chatId) => {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1
+        }
+      ],
+      mode: 'subscription'
+    });
+
+    const userRef = db.collection('users').doc(chatId.toString());
+    await userRef.update({
+      stripeCustomerId: session.customer
+    });
+
+    return session.id;
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    throw new Error('Internal Server Error');
+  }
+};
+
+// Endpoint to retrieve the subscription status for a user
+app.get('/subscription-status', async (req, res) => {
+  const { chatId } = req.query;
+
+  try {
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+
+    if (userDoc.exists) {
+      const subscription = userDoc.data().subscription;
+      res.json(subscription);
+    } else {
+      res.status(404).send('User not found');
+    }
+  } catch (error) {
+    console.error('Error retrieving subscription status:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Handle /subscribe command
 bot.onText(/\/subscribe/, async (msg) => {
   console.log('/subscribe command received');
   const chatId = msg.chat.id;
@@ -1058,18 +1086,8 @@ bot.onText(/\/subscribe/, async (msg) => {
 
   if (user.exists && user.data().userType === 'recruiter') {
     try {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [{
-          price: 'price_1PNcuLP9AlrL3WaNIocXw0Ml', // Replace with actual price ID
-          quantity: 1,
-        }],
-        mode: 'subscription',
-        success_url: 'https://your-success-url.com',
-        cancel_url: 'https://your-cancel-url.com',
-      });
-
-      bot.sendMessage(chatId, `Please complete your subscription payment: ${session.url}`);
+      const sessionId = await createCheckoutSession('price_1PNcuLP9AlrL3WaNIocXw0Ml', chatId);
+      bot.sendMessage(chatId, `Please complete your subscription payment using this session ID: ${sessionId}`);
     } catch (error) {
       console.error('Error creating Stripe session:', error);
       bot.sendMessage(chatId, 'There was an error processing your subscription. Please try again.');
@@ -1077,6 +1095,60 @@ bot.onText(/\/subscribe/, async (msg) => {
   } else {
     bot.sendMessage(chatId, "Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.");
   }
+});
+
+// Middleware to check subscription status
+const checkSubscription = async (req, res, next) => {
+  const chatId = req.body.message.chat.id.toString();
+  const userRef = db.collection('users').doc(chatId);
+  const userDoc = await userRef.get();
+
+  if (userDoc.exists) {
+    const user = userDoc.data();
+    if (user.userType === 'recruiter') {
+      const now = new Date();
+      if (user.subscription.status === 'trial') {
+        const expiryDate = new Date(user.subscription.expiry);
+        if (now >= expiryDate) {
+          await userRef.update({
+            'subscription.status': 'expired'
+          });
+          bot.sendMessage(chatId, 'Your trial period has expired. Please subscribe to continue using the service.');
+        }
+      } else if (user.subscription.status === 'expired') {
+        const allowedCommands = ['/start', '/userinfo', '/setrecruiter', '/setjobseeker', '/subscribe'];
+        const command = req.body.message.text.split(' ')[0];
+        if (!allowedCommands.includes(command)) {
+          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+          return;
+        }
+      }
+    }
+  }
+  next();
+};
+
+// Apply middleware to all bot commands
+app.use(checkSubscription);
+
+// Schedule the function to check subscription status every day
+schedule.scheduleJob('0 0 * * *', async () => {
+  const now = new Date();
+  const usersRef = db.collection('users');
+  const usersSnapshot = await usersRef.where('userType', '==', 'recruiter').get();
+
+  usersSnapshot.forEach(async (userDoc) => {
+    const user = userDoc.data();
+    if (user.subscription.status === 'trial') {
+      const expiryDate = new Date(user.subscription.expiry);
+      if (now >= expiryDate) {
+        await usersRef.doc(userDoc.id).update({
+          'subscription.status': 'expired'
+        });
+        bot.sendMessage(userDoc.id, 'Your trial period has expired. Please subscribe to continue using the service.');
+      }
+    }
+  });
 });
 
 ////******************////
