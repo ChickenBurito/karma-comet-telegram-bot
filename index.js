@@ -720,17 +720,29 @@ bot.onText(/\/meetingstatus/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
-      const meetingCommitments = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+      // Retrieve meeting commitments where the user is either the recruiter or the job seeker
+      const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+      const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
-      if (!meetingCommitments.empty) {
+      if (!recruiterMeetings.empty || !jobSeekerMeetings.empty) {
           let responseMessage = 'Scheduled Meetings:\n';
-          meetingCommitments.forEach(doc => {
+
+          recruiterMeetings.forEach(doc => {
               const data = doc.data();
               responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
               responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
               responseMessage += `Meeting Scheduled Time: ${data.meeting_scheduled_at}\n`;
               responseMessage += `Description: ${data.description}\n\n`;
           });
+
+          jobSeekerMeetings.forEach(doc => {
+              const data = doc.data();
+              responseMessage += `Job Seeker Name: ${data.counterpart_name}\n`;
+              responseMessage += `Recruiter Name: ${data.recruiter_name}\n`;
+              responseMessage += `Meeting Scheduled Time: ${data.meeting_scheduled_at}\n`;
+              responseMessage += `Description: ${data.description}\n\n`;
+          });
+
           bot.sendMessage(chatId, responseMessage);
       } else {
           bot.sendMessage(chatId, 'No scheduled meetings found.');
