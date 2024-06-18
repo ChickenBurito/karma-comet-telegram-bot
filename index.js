@@ -539,7 +539,7 @@ bot.on('callback_query', async (callbackQuery) => {
                             feedback_submitted: false
                         });
 
-                        bot.sendMessage(recruiter_id, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>_${feedbackRequestId}`);
+                        bot.sendMessage(recruiter_id, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>`);
                     }
                 }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
 
@@ -638,10 +638,10 @@ bot.on('callback_query', async (callbackQuery) => {
 });
 
 // Handle /feedbackdays command
-bot.onText(/\/feedbackdays (\d+)_([\w-]+)/, async (msg, match) => {
+bot.onText(/\/feedbackdays (\d+)/, async (msg, match) => {
   console.log('/feedbackdays command received');
   const chatId = msg.chat.id;
-  const [days, feedbackRequestId] = match.slice(1);
+  const [days] = match.slice(1);
 
   try {
     const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
