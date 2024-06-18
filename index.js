@@ -1175,13 +1175,24 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (callbackQuery.data === 'subscribe_monthly') {
     priceId = 'price_1PT87KP9AlrL3WaNK4UsnChE';
   } else if (callbackQuery.data === 'unsubscribe') {
-    // Handle unsubscribe logic here
-    await handleUnsubscribe(user.data().stripeCustomerId);
-    await userRef.update({
-      'subscription.status': 'canceled',
-      'subscription.expiry': null
-    });
-    bot.sendMessage(chatId, 'Your subscription has been canceled.');
+    const stripeCustomerId = user.data().stripeCustomerId;
+
+    if (!stripeCustomerId) {
+      bot.sendMessage(chatId, 'You do not have an active subscription to unsubscribe from.');
+      return;
+    }
+
+    try {
+      await handleUnsubscribe(stripeCustomerId);
+      await userRef.update({
+        'subscription.status': 'canceled',
+        'subscription.expiry': null
+      });
+      bot.sendMessage(chatId, 'Your subscription has been canceled.');
+    } catch (error) {
+      console.error('Error during unsubscription:', error);
+      bot.sendMessage(chatId, 'There was an error processing your unsubscription. Please try again.');
+    }
     return;
   }
 
@@ -1198,9 +1209,16 @@ bot.on('callback_query', async (callbackQuery) => {
 
 // Function to handle unsubscribe
 const handleUnsubscribe = async (customerId) => {
-  const subscriptions = await stripe.subscriptions.list({ customer: customerId });
-  if (subscriptions.data.length > 0) {
-    await stripe.subscriptions.del(subscriptions.data[0].id);
+  try {
+    const subscriptions = await stripe.subscriptions.list({ customer: customerId });
+    if (subscriptions.data.length > 0) {
+      await stripe.subscriptions.del(subscriptions.data[0].id);
+    } else {
+      console.log('No active subscriptions found for customer:', customerId);
+    }
+  } catch (error) {
+    console.error('Error retrieving subscriptions for customer:', customerId, error);
+    throw new Error('Error during unsubscription process.');
   }
 };
 
