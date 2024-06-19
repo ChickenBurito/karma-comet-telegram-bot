@@ -131,6 +131,10 @@ bot.onText(/\/start/, (msg) => {
   bot.sendMessage(chatId, "Type /register to get started.");
 });
 
+////************************************************////
+//++// User registration and Roles selection //++/////
+////**********************************************////
+
 /// Handle /register command with telegram username
 bot.onText(/\/register/, async (msg) => {
   console.log('/register command received');
@@ -144,6 +148,7 @@ bot.onText(/\/register/, async (msg) => {
       registered_at: new Date().toISOString(),
       score: 0,
       userType: 'jobSeeker', // Default user type
+      isAdmin: false,
       subscription: {
         status: 'free',
         expiry: null
@@ -266,6 +271,7 @@ bot.onText(/\/reset/, async (msg) => {
       name: userName,
       score: 0,
       userType: 'jobSeeker', // Reset to default user type
+      isAdmin: false,
       subscription: {
         status: 'free',
         expiry: null
@@ -277,6 +283,76 @@ bot.onText(/\/reset/, async (msg) => {
   } catch (error) {
     console.error('Error resetting user:', error);
     bot.sendMessage(chatId, 'There was an error processing your reset request. Please try again.');
+  }
+});
+
+////************************************************////
+//++// Direct Messaging and Broadcasting Commands//++//
+////**********************************************////
+
+// Function to send a direct message to a user
+const sendDirectMessage = async (chatId, message) => {
+  try {
+    await bot.sendMessage(chatId, message);
+    console.log(`Message sent to ${chatId}`);
+  } catch (error) {
+    console.error(`Error sending message to ${chatId}:`, error);
+  }
+};
+
+// Function to broadcast a message to all users
+const broadcastMessage = async (message) => {
+  try {
+    const usersRef = db.collection('users');
+    const usersSnapshot = await usersRef.get();
+    
+    usersSnapshot.forEach(async (userDoc) => {
+      const userData = userDoc.data();
+      const chatId = userDoc.id;
+      
+      if (userData.userType === 'recruiter' || userData.userType === 'jobseeker') {
+        await sendDirectMessage(chatId, message);
+      }
+    });
+    
+    console.log('Broadcast message sent to all users');
+  } catch (error) {
+    console.error('Error broadcasting message:', error);
+  }
+};
+
+// Handle /broadcast command (admin only)
+bot.onText(/\/broadcast (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const message = match[1];
+
+  // Check if user is admin
+  const userRef = db.collection('users').doc(chatId.toString());
+  const userDoc = await userRef.get();
+  
+  if (userDoc.exists && userDoc.data().isAdmin) {
+    await broadcastMessage(message);
+    bot.sendMessage(chatId, 'Broadcast message sent.');
+  } else {
+    bot.sendMessage(chatId, 'You do not have permission to send broadcast messages.');
+  }
+});
+
+// Handle /directmessage command (admin only)
+bot.onText(/\/directmessage (\d+) (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const targetChatId = match[1];
+  const message = match[2];
+
+  // Check if user is admin
+  const userRef = db.collection('users').doc(chatId.toString());
+  const userDoc = await userRef.get();
+
+  if (userDoc.exists && userDoc.data().isAdmin) {
+    await sendDirectMessage(targetChatId, message);
+    bot.sendMessage(chatId, `Message sent to ${targetChatId}.`);
+  } else {
+    bot.sendMessage(chatId, 'You do not have permission to send direct messages.');
   }
 });
 
