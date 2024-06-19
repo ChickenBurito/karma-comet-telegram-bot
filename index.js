@@ -145,6 +145,7 @@ bot.onText(/\/register/, async (msg) => {
     console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
     await db.collection('users').doc(chatId.toString()).set({
       name: userName,
+      chatId: chatId,
       registered_at: new Date().toISOString(),
       score: 0,
       userType: 'jobSeeker', // Default user type
@@ -154,7 +155,7 @@ bot.onText(/\/register/, async (msg) => {
         expiry: null
       }
     });
-    console.log(`User ${userName} registered successfully.`);
+    console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
 
     bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. You can change your role to recruiter if needed using /setrecruiter. You are all set! You can now schedule a meeting or wait for incoming requests.`);
   } catch (error) {
@@ -277,7 +278,7 @@ bot.onText(/\/reset/, async (msg) => {
         expiry: null
       }
     });
-    console.log(`User ${userName} reset successfully.`);
+    console.log(`User ${userName} with chat ID ${chatId} reset successfully.`);
 
     bot.sendMessage(chatId, `Your status has been reset. You are now a job seeker with a free subscription. You can change your role to recruiter if needed using /setrecruiter.`);
   } catch (error) {
@@ -365,7 +366,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
   const [counterpartUsername, description] = match.slice(1);
-  console.log(`Meeting request by @${msg.from.username} for @${counterpartUsername} with description: ${description}`);
+  console.log(`Meeting request by @${msg.from.username} for @${counterpartUsername} with description: ${description} in chat ID: ${chatId}`);
 
   try {
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
@@ -396,7 +397,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         counterpart_accepted: false,
         meeting_duration: null // Initialize meeting duration
       });
-      console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId}`);
+      console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
 
       // Ask user to choose meeting duration
       const durations = ['30 minutes', '45 minutes', '1 hour', '1,5 hours', '2 hours'];
@@ -431,7 +432,7 @@ bot.on('callback_query', async (callbackQuery) => {
   if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
     const meetingRequestId = data[3];
     const duration = data.slice(4).join(' '); // Join the rest of the array to get the full duration text
-    console.log(`Duration chosen: ${duration}, Meeting Request ID: ${meetingRequestId}`);
+    console.log(`Duration chosen: ${duration}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
     try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
@@ -462,7 +463,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data[0] === 'choose' && data[1] === 'date' && data[2] === 'meeting') {
     const date = data[4];
     const meetingRequestId = data[3];
-    console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId}`);
+    console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
     const availableTimes = [];
     for (let hour = 9; hour <= 19; hour++) {
@@ -482,7 +483,7 @@ bot.on('callback_query', async (callbackQuery) => {
     const meetingRequestId = data[3];
     const date = data[4];
     const time = data[5];
-    console.log(`Time slot chosen: ${date} ${time}, Meeting Request ID: ${meetingRequestId}`);
+    console.log(`Time slot chosen: ${date} ${time}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
     try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
