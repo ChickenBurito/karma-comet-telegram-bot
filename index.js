@@ -366,7 +366,6 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
   const [counterpartUsername, description] = match.slice(1);
-  console.log(`Meeting request by @${msg.from.username} for @${counterpartUsername} with description: ${description} in chat ID: ${chatId}`);
 
   try {
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
@@ -376,11 +375,25 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const counterpartId = counterpart.id;
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
+      const userRef = db.collection('users').doc(chatId.toString());
+      const userDoc = await userRef.get();
+      
+      if (userDoc.exists && userDoc.data().userType === 'recruiter') {
+        const user = userDoc.data();
+        const now = new Date();
+        const expiryDate = new Date(user.subscription.expiry);
+
+        if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
+          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+          return;
+        }
+      }
+
       const recruiterCompanyName = msg.from.company_name || '';
       const recruiterName = msg.from.username;
 
       // Generate a unique meeting request ID
-      const meetingRequestId = `${Date.now()}${Math.floor((Math.random() * 1000)+1)}`;
+      const meetingRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
 
       // Store the meeting request in Firestore
       await db.collection('meetingRequests').doc(meetingRequestId).set({
@@ -400,7 +413,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
 
       // Ask user to choose meeting duration
-      const durations = ['30 minutes', '45 minutes', '1 hour', '1,5 hours', '2 hours'];
+      const durations = ['30 minutes', '45 minutes', '1 hour', '1.5 hours', '2 hours'];
 
       const opts = {
         reply_markup: {
