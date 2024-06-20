@@ -6,6 +6,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 const schedule = require('node-schedule');
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const moment = require('moment-timezone');
 
 // Check required environment variables
 const requiredEnvVars = ['STRIPE_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'BOT_URL'];
@@ -135,32 +136,91 @@ bot.onText(/\/start/, (msg) => {
 //++// User registration and Roles selection //++/////
 ////**********************************************////
 
-/// Handle /register command with telegram username
+// Handle /register command with telegram username
 bot.onText(/\/register/, async (msg) => {
   console.log('/register command received');
   const chatId = msg.chat.id;
   const userName = msg.from.username || 'User';
 
   try {
-    console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
-    await db.collection('users').doc(chatId.toString()).set({
-      name: userName,
-      chatId: chatId,
-      registered_at: new Date().toISOString(),
-      score: 0,
-      userType: 'jobSeeker', // Default user type
-      isAdmin: false,
-      subscription: {
-        status: 'free',
-        expiry: null
-      }
-    });
-    console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
+      const userRef = db.collection('users').doc(chatId.toString());
+      const userDoc = await userRef.get();
 
-    bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. You can change your role to recruiter if needed using /setrecruiter. You are all set! You can now schedule a meeting or wait for incoming requests.`);
+      if (userDoc.exists) {
+          console.log(`User ${userName} with chat ID: ${chatId} is already registered.`);
+          bot.sendMessage(chatId, 'You are already registered.');
+      } else {
+          console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
+          await userRef.set({
+              name: userName,
+              chatId: chatId,
+              registered_at: new Date().toISOString(),
+              score: 0,
+              userType: 'jobSeeker', // Default user type
+              isAdmin: false,
+              subscription: {
+                  status: 'free',
+                  expiry: null
+              }
+          });
+          console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
+
+          bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. You are all set! You can now schedule your first meeting or wait for incoming requests. You can also change your role to recruiter if needed using /setrecruiter`);
+
+          // Ask for the user's time zone
+          bot.sendMessage(chatId, "Please select your time zone:", {
+              reply_markup: {
+                  inline_keyboard: [
+                      [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_UTC-12:00" }],
+                      [{ text: "UTC-11:00 (American Samoa)", callback_data: "timezone_UTC-11:00" }],
+                      [{ text: "UTC-10:00 (Hawaii)", callback_data: "timezone_UTC-10:00" }],
+                      [{ text: "UTC-09:00 (Alaska)", callback_data: "timezone_UTC-09:00" }],
+                      [{ text: "UTC-08:00 (Pacific Time)", callback_data: "timezone_UTC-08:00" }],
+                      [{ text: "UTC-07:00 (Mountain Time)", callback_data: "timezone_UTC-07:00" }],
+                      [{ text: "UTC-06:00 (Central Time)", callback_data: "timezone_UTC-06:00" }],
+                      [{ text: "UTC-05:00 (Eastern Time)", callback_data: "timezone_UTC-05:00" }],
+                      [{ text: "UTC-04:00 (Atlantic Time)", callback_data: "timezone_UTC-04:00" }],
+                      [{ text: "UTC-03:00 (Argentina)", callback_data: "timezone_UTC-03:00" }],
+                      [{ text: "UTC-02:00 (South Georgia)", callback_data: "timezone_UTC-02:00" }],
+                      [{ text: "UTC-01:00 (Azores)", callback_data: "timezone_UTC-01:00" }],
+                      [{ text: "UTC+00:00 (London)", callback_data: "timezone_UTC+00:00" }],
+                      [{ text: "UTC+01:00 (Berlin)", callback_data: "timezone_UTC+01:00" }],
+                      [{ text: "UTC+02:00 (Cairo)", callback_data: "timezone_UTC+02:00" }],
+                      [{ text: "UTC+03:00 (Moscow)", callback_data: "timezone_UTC+03:00" }],
+                      [{ text: "UTC+04:00 (Dubai)", callback_data: "timezone_UTC+04:00" }],
+                      [{ text: "UTC+05:00 (Karachi)", callback_data: "timezone_UTC+05:00" }],
+                      [{ text: "UTC+06:00 (Dhaka)", callback_data: "timezone_UTC+06:00" }],
+                      [{ text: "UTC+07:00 (Bangkok)", callback_data: "timezone_UTC+07:00" }],
+                      [{ text: "UTC+08:00 (Singapore)", callback_data: "timezone_UTC+08:00" }],
+                      [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_UTC+09:00" }],
+                      [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_UTC+10:00" }],
+                      [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_UTC+11:00" }],
+                      [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_UTC+12:00" }],
+                  ]
+              }
+          });
+      }
   } catch (error) {
-    console.error('Error registering user:', error);
-    bot.sendMessage(chatId, 'There was an error processing your registration. Please try again.');
+      console.error('Error registering user:', error);
+      bot.sendMessage(chatId, 'There was an error processing your registration. Please try again.');
+  }
+});
+
+// Handle callback for time zone selection
+bot.on('callback_query', async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data;
+
+  if (data.startsWith('timezone_')) {
+      const timeZone = data.split('_')[1];
+
+      const userRef = db.collection('users').doc(chatId.toString());
+      await userRef.update({
+          timeZone: timeZone
+      });
+
+      bot.sendMessage(chatId, `Your time zone has been set to ${timeZone}.`);
   }
 });
 
