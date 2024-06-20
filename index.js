@@ -376,14 +376,14 @@ const broadcastMessage = async (message) => {
     const usersRef = db.collection('users');
     const usersSnapshot = await usersRef.get();
     
-    usersSnapshot.forEach(async (userDoc) => {
+    for (const userDoc of usersSnapshot.docs) {
       const userData = userDoc.data();
       const chatId = userDoc.id;
       
       if (userData.userType === 'recruiter' || userData.userType === 'jobseeker') {
         await sendDirectMessage(chatId, message);
       }
-    });
+    }
     
     console.log('Broadcast message sent to all users');
   } catch (error) {
