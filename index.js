@@ -1355,30 +1355,33 @@ app.get('/subscription-status', async (req, res) => {
   }
 });
 
-// Handle /subscribe command
 bot.onText(/\/subscribe/, async (msg) => {
   console.log('/subscribe command received');
   const chatId = msg.chat.id;
   const userRef = db.collection('users').doc(chatId.toString());
   const user = await userRef.get();
 
-  if (user.exists && user.data().userType === 'recruiter') {
-    const opts = {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: 'Subscribe Yearly (99 EUR)', callback_data: 'subscribe_yearly' },
-            { text: 'Subscribe Monthly (15 EUR)', callback_data: 'subscribe_monthly' }
-          ],
-          [
-            { text: 'Unsubscribe', callback_data: 'unsubscribe' }
+  if (user.exists) {
+    if (user.data().userType === 'recruiter') {
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Subscribe Yearly (99 EUR)', callback_data: 'subscribe_yearly' },
+              { text: 'Subscribe Monthly (15 EUR)', callback_data: 'subscribe_monthly' }
+            ],
+            [
+              { text: 'Unsubscribe', callback_data: 'unsubscribe' }
+            ]
           ]
-        ]
-      }
-    };
-    bot.sendMessage(chatId, 'Please choose your subscription plan:', opts);
+        }
+      };
+      bot.sendMessage(chatId, 'Please choose your subscription plan:', opts);
+    } else {
+      bot.sendMessage(chatId, "Only recruiters need to subscribe.");
+    }
   } else {
-    bot.sendMessage(chatId, "Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.");
+    bot.sendMessage(chatId, 'User not found. Please register using /register.');
   }
 });
 
@@ -1457,10 +1460,12 @@ const checkSubscription = async (req, res, next) => {
       const user = userDoc.data();
       const command = req.body.message.text.split(' ')[0];
 
+      // Allow commands that do not require subscription check
       if (!notAllowedCommands.includes(command)) {
         return next();
       }
 
+      // Check subscription status only for recruiters
       if (user.userType === 'recruiter') {
         const now = new Date();
         const expiryDate = new Date(user.subscription.expiry);
@@ -1470,11 +1475,10 @@ const checkSubscription = async (req, res, next) => {
             'subscription.status': 'expired'
           });
           bot.sendMessage(chatId, 'Your trial period has expired. Please subscribe to continue using the service.');
+          return;
         } else if (user.subscription.status === 'expired') {
-          if (notAllowedCommands.includes(command)) {
-            bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
-            return;
-          }
+          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+          return;
         }
       }
     }
