@@ -343,7 +343,7 @@ bot.onText(/\/reset/, async (msg) => {
         status: 'free',
         expiry: null
       },
-      timeZone: "timezone_UTC+00:00" 
+      timeZone: 'UTC' // Default to UTC time zone
     });
     console.log(`User ${userName} with chat ID ${chatId} reset successfully.`);
 
@@ -813,6 +813,11 @@ bot.onText(/\/feedbackdays (\d+)/, async (msg, match) => {
   const [days] = match.slice(1);
 
   try {
+    // Retrieve the user's time zone from the database
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+    const userTimeZone = userDoc.data().timeZone || 'UTC';
+
     const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
     const feedbackRequest = await feedbackRequestRef.get();
 
@@ -833,7 +838,7 @@ bot.onText(/\/feedbackdays (\d+)/, async (msg, match) => {
         }
       };
 
-      bot.sendMessage(feedbackRequest.data().counterpart_id, `You have a feedback request from @${msg.from.username} for the meeting "${feedbackRequest.data().description}". Feedback will be provided by ${feedbackDueDate.toLocaleString()}. Do you approve?`, opts);
+      bot.sendMessage(feedbackRequest.data().counterpart_id, `You have a feedback request from @${msg.from.username} for the meeting "${feedbackRequest.data().description}". Feedback will be provided by ${moment.tz(feedbackDueDate, userTimeZone).format('YYYY-MM-DD HH:mm')}. Do you approve?`, opts);
     } else {
       bot.sendMessage(chatId, 'Feedback request not found.');
     }
@@ -1123,6 +1128,9 @@ bot.on('callback_query', async (callbackQuery) => {
 
           await userRef.update({ score: newScore });
 
+          // Retrieve the user's time zone from the database
+          const userTimeZone = user.data().timeZone || 'UTC';
+
           // Check for recruiter and update subscription status
           if (user.data().userType === 'recruiter' && status === 'attended' && user.data().subscription.status === 'free') {
             const expiryDate = new Date();
@@ -1131,11 +1139,11 @@ bot.on('callback_query', async (callbackQuery) => {
             await userRef.update({
               subscription: {
                 status: 'trial',
-                expiry: expiryDate
+                expiry: expiryDate.toISOString()
               }
             });
 
-            bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${expiryDate}.`);
+            bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${moment.tz(expiryDate, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
 
             // Automatically create feedback request after 2.5 hours
             setTimeout(async () => {
@@ -1173,20 +1181,22 @@ bot.on('callback_query', async (callbackQuery) => {
           counterpartType = 'recruiter';
         }
 
-        if (status === 'fulfilled') {
-          const newScore = user.data().score + 10;
-          await userRef.update({ score: newScore });
-          await commitmentRef.update({ [`${userType}_commitment_state`]: 'fulfilled' });
-        } else if (status === 'missed') {
-          const newScore = user.data().score - 10;
-          await userRef.update({ score: newScore });
-          await commitmentRef.update({ [`${userType}_commitment_state`]: 'missed' });
-        }
-
-        const counterpartId = commitmentData[`${counterpartType}_id`];
+        const userRef = db.collection('users').doc(chatId.toString());
         const user = await userRef.get();
 
         if (user.exists) {
+          let newScore = user.data().score;
+          if (status === 'fulfilled') {
+            newScore += 10;
+            await userRef.update({ score: newScore });
+            await commitmentRef.update({ [`${userType}_commitment_state`]: 'fulfilled' });
+          } else if (status === 'missed') {
+            newScore -= 10;
+            await userRef.update({ score: newScore });
+            await commitmentRef.update({ [`${userType}_commitment_state`]: 'missed' });
+          }
+
+          const counterpartId = commitmentData[`${counterpartType}_id`];
           const opts = {
             reply_markup: {
               inline_keyboard: [
@@ -1199,9 +1209,8 @@ bot.on('callback_query', async (callbackQuery) => {
           };
 
           bot.sendMessage(counterpartId, `Update your commitment status for "${commitment.data().description}":`, opts);
+          bot.sendMessage(chatId, `Your commitment status for "${commitment.data().description}" has been updated to ${status}.`);
         }
-
-        bot.sendMessage(chatId, `Your commitment status for "${commitment.data().description}" has been updated to ${status}.`);
       } else {
         bot.sendMessage(chatId, 'Commitment not found.');
       }
@@ -1214,7 +1223,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
 ////*******************////
 /// Subscription logic ///
-////******************////  
+////******************////
 
 // Webhook endpoint
 app.post('/webhook', (req, res) => {
@@ -1246,10 +1255,17 @@ app.post('/webhook', (req, res) => {
 // Function to handle subscription updates
 const handleSubscriptionUpdate = async (subscription) => {
   const userRef = db.collection('users').doc(subscription.customer);
-  await userRef.update({
-    'subscription.status': subscription.status,
-    'subscription.expiry': new Date(subscription.current_period_end * 1000).toISOString()
-  });
+  const userDoc = await userRef.get();
+
+  if (userDoc.exists) {
+    const user = userDoc.data();
+    const userTimeZone = user.timeZone || 'UTC'; // Retrieve user's time zone
+
+    await userRef.update({
+      'subscription.status': subscription.status,
+      'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString()
+    });
+  }
 };
 
 // Function to handle subscription cancellations
@@ -1278,11 +1294,18 @@ const createCheckoutSession = async (priceId, chatId) => {
     });
 
     const userRef = db.collection('users').doc(chatId.toString());
-    await userRef.update({
-      stripeCustomerId: session.customer,
-      'subscription.status': 'active',
-      'subscription.expiry': new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() // Set expiry date to 14 days from now
-    });
+    const userDoc = await userRef.get();
+
+    if (userDoc.exists) {
+      const user = userDoc.data();
+      const userTimeZone = user.timeZone || 'UTC'; // Retrieve user's time zone
+
+      await userRef.update({
+        stripeCustomerId: session.customer,
+        'subscription.status': 'active',
+        'subscription.expiry': moment().tz(userTimeZone).add(14, 'days').toISOString() // Set expiry date to 14 days from now
+      });
+    }
 
     return session.url;
   } catch (error) {
@@ -1449,7 +1472,11 @@ schedule.scheduleJob('0 0 * * *', async () => {
     const expiryDate = new Date(user.subscription.expiry);
     const now = new Date();
 
-    if (user.subscription.status === 'trial' && now >= expiryDate) {
+    // Adjust now to the user's time zone
+    const userTimeZone = user.timeZone || 'UTC'; // Default to UTC if no time zone is set
+    const userNow = new Date(now.toLocaleString('en-US', { timeZone: userTimeZone }));
+    
+    if (user.subscription.status === 'trial' && userNow >= expiryDate) {
       await usersRef.doc(userDoc.id).update({
         'subscription.status': 'expired'
       });
@@ -1469,25 +1496,39 @@ const sendMeetingReminders = async () => {
   const meetings = await db.collection('meetingCommitments').get();
 
   meetings.forEach(async (doc) => {
-      const meeting = doc.data();
-      const meetingDate = new Date(meeting.meeting_scheduled_at);
+    const meeting = doc.data();
+    const meetingDate = new Date(meeting.meeting_scheduled_at);
 
-      // Skip past meetings
-      if (meetingDate <= now) {
-          return;
-      }
+    // Adjust meeting date to the user's time zone
+    const recruiterRef = await db.collection('users').doc(meeting.recruiter_id.toString()).get();
+    const counterpartRef = await db.collection('users').doc(meeting.counterpart_id.toString()).get();
 
-      // Reminder 24 hours before
-      if ((meetingDate - now) <= 24 * 60 * 60 * 1000 && (meetingDate - now) > 23 * 60 * 60 * 1000) {
-          bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meeting.meeting_scheduled_at}.`);
-          bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meeting.meeting_scheduled_at}.`);
-      }
+    const recruiterTimeZone = recruiterRef.exists ? recruiterRef.data().timeZone : 'UTC';
+    const counterpartTimeZone = counterpartRef.exists ? counterpartRef.data().timeZone : 'UTC';
 
-      // Reminder 1 hour before
-      if ((meetingDate - now) <= 1 * 60 * 60 * 1000 && (meetingDate - now) > 59 * 60 * 1000) {
-          bot.sendMessage(meeting.recruiter_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.counterpart_name} is happening in 1 hour.`);
-          bot.sendMessage(meeting.counterpart_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.recruiter_name} is happening in 1 hour.`);
-      }
+    const recruiterNow = new Date(now.toLocaleString('en-US', { timeZone: recruiterTimeZone }));
+    const counterpartNow = new Date(now.toLocaleString('en-US', { timeZone: counterpartTimeZone }));
+
+    // Skip past meetings
+    if (meetingDate <= recruiterNow || meetingDate <= counterpartNow) {
+      return;
+    }
+
+    // Reminder 24 hours before
+    if ((meetingDate - recruiterNow) <= 24 * 60 * 60 * 1000 && (meetingDate - recruiterNow) > 23 * 60 * 60 * 1000) {
+      bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+    }
+    if ((meetingDate - counterpartNow) <= 24 * 60 * 60 * 1000 && (meetingDate - counterpartNow) > 23 * 60 * 60 * 1000) {
+      bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+    }
+
+    // Reminder 1 hour before
+    if ((meetingDate - recruiterNow) <= 1 * 60 * 60 * 1000 && (meetingDate - recruiterNow) > 59 * 60 * 1000) {
+      bot.sendMessage(meeting.recruiter_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.counterpart_name} is happening in 1 hour.`);
+    }
+    if ((meetingDate - counterpartNow) <= 1 * 60 * 60 * 1000 && (meetingDate - counterpartNow) > 59 * 60 * 1000) {
+      bot.sendMessage(meeting.counterpart_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.recruiter_name} is happening in 1 hour.`);
+    }
   });
 };
 
@@ -1498,25 +1539,39 @@ const sendFeedbackReminders = async () => {
   const feedbacks = await db.collection('feedbackCommitments').get();
 
   feedbacks.forEach(async (doc) => {
-      const feedback = doc.data();
-      const feedbackDate = new Date(feedback.feedback_scheduled_at);
+    const feedback = doc.data();
+    const feedbackDate = new Date(feedback.feedback_scheduled_at);
 
-      // Skip past feedbacks
-      if (feedbackDate <= now) {
-          return;
-      }
+    // Adjust feedback date to the user's time zone
+    const recruiterRef = await db.collection('users').doc(feedback.recruiter_id.toString()).get();
+    const counterpartRef = await db.collection('users').doc(feedback.counterpart_id.toString()).get();
 
-      // Reminder 24 hours before
-      if ((feedbackDate - now) <= 24 * 60 * 60 * 1000 && (feedbackDate - now) > 23 * 60 * 60 * 1000) {
-          bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedback.feedback_scheduled_at}.`);
-          bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedback.feedback_scheduled_at}.`);
-      }
+    const recruiterTimeZone = recruiterRef.exists ? recruiterRef.data().timeZone : 'UTC';
+    const counterpartTimeZone = counterpartRef.exists ? counterpartRef.data().timeZone : 'UTC';
 
-      // Reminder 1 hour before
-      if ((feedbackDate - now) <= 1 * 60 * 60 * 1000 && (feedbackDate - now) > 59 * 60 * 1000) {
-          bot.sendMessage(feedback.recruiter_id, `Reminder: Your feedback for the meeting with ${feedback.counterpart_name} is due in 1 hour.`);
-          bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name}'s feedback for your meeting is due in 1 hour.`);
-      }
+    const recruiterNow = new Date(now.toLocaleString('en-US', { timeZone: recruiterTimeZone }));
+    const counterpartNow = new Date(now.toLocaleString('en-US', { timeZone: counterpartTimeZone }));
+
+    // Skip past feedbacks
+    if (feedbackDate <= recruiterNow || feedbackDate <= counterpartNow) {
+      return;
+    }
+
+    // Reminder 24 hours before
+    if ((feedbackDate - recruiterNow) <= 24 * 60 * 60 * 1000 && (feedbackDate - recruiterNow) > 23 * 60 * 60 * 1000) {
+      bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedback.feedback_scheduled_at}.`);
+    }
+    if ((feedbackDate - counterpartNow) <= 24 * 60 * 60 * 1000 && (feedbackDate - counterpartNow) > 23 * 60 * 60 * 1000) {
+      bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedback.feedback_scheduled_at}.`);
+    }
+
+    // Reminder 1 hour before
+    if ((feedbackDate - recruiterNow) <= 1 * 60 * 60 * 1000 && (feedbackDate - recruiterNow) > 59 * 60 * 1000) {
+      bot.sendMessage(feedback.recruiter_id, `Reminder: Your feedback for the meeting with ${feedback.counterpart_name} is due in 1 hour.`);
+    }
+    if ((feedbackDate - counterpartNow) <= 1 * 60 * 60 * 1000 && (feedbackDate - counterpartNow) > 59 * 60 * 1000) {
+      bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name}'s feedback for your meeting is due in 1 hour.`);
+    }
   });
 };
 
