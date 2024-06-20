@@ -316,7 +316,7 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 });
 
 // List of authorized user IDs or usernames for testing commands
-const authorizedUsers = ['klngnv','kriskolgan']; // Add your username or user ID here
+const resetAuthorizedUsers = ['klngnv','kriskolgan']; // Add your username or user ID here
 
 // Handle /reset command for testing purposes
 bot.onText(/\/reset/, async (msg) => {
@@ -325,7 +325,7 @@ bot.onText(/\/reset/, async (msg) => {
   const userName = msg.from.username || 'User';
 
   // Check if the user is authorized
-  if (!authorizedUsers.includes(userName)) {
+  if (!resetAuthorizedUsers.includes(userName)) {
     bot.sendMessage(chatId, 'You are not authorized to use this command.');
     return;
   }
@@ -334,13 +334,16 @@ bot.onText(/\/reset/, async (msg) => {
     console.log(`Resetting user: ${userName} with chat ID: ${chatId}`);
     await db.collection('users').doc(chatId.toString()).set({
       name: userName,
+      chatId: chatId,
+      registered_at: new Date().toISOString(),
       score: 0,
       userType: 'jobSeeker', // Reset to default user type
       isAdmin: false,
       subscription: {
         status: 'free',
         expiry: null
-      }
+      },
+      timeZone: "timezone_UTC+00:00" 
     });
     console.log(`User ${userName} with chat ID ${chatId} reset successfully.`);
 
@@ -441,7 +444,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
 
       const userRef = db.collection('users').doc(chatId.toString());
       const userDoc = await userRef.get();
-      
+
       if (userDoc.exists && userDoc.data().userType === 'recruiter') {
         const user = userDoc.data();
         const now = new Date();
@@ -674,9 +677,12 @@ bot.on('callback_query', async (callbackQuery) => {
             counterpart_commitment_state: 'pending_meeting',
             meeting_duration: meeting_duration // Include meeting duration
           });
+          const userRef = db.collection('users').doc(chatId.toString());
+          const userDoc = await userRef.get();
+          const userTimeZone = userDoc.data().timeZone || 'UTC';
                 // Notify both parties
-                bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
-                bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+                bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${moment.tz(selectedTimeSlot, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
+                bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${moment.tz(selectedTimeSlot, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
 
                 // Schedule feedback request generation after 2.5 hours
                 setTimeout(async () => {
@@ -769,7 +775,7 @@ bot.on('callback_query', async (callbackQuery) => {
           counterpart_commitment_state: 'pending_feedback'
         });
 
-        bot.sendMessage(counterpart_id, `The recruiter will provide feedback by ${new Date(feedbackDueDate).toLocaleString()}.`);
+        bot.sendMessage(counterpart_id, `The recruiter will provide feedback by ${moment.tz(feedbackDueDate, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
         bot.sendMessage(chatId, 'Feedback request approved.');
       } else {
         bot.sendMessage(chatId, 'Feedback request not found.');
@@ -838,7 +844,7 @@ bot.onText(/\/feedbackdays (\d+)/, async (msg, match) => {
 });
 
 ////*************************************////
-// Users, Meetings and Feednack status check
+// Users, Meetings and Feedback status check
 ////************************************////
 
 // Handle /userinfo command
