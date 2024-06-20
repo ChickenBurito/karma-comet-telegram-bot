@@ -847,33 +847,31 @@ bot.onText(/\/userinfo/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
-      const userRef = db.collection('users').doc(chatId.toString());
-      const user = await userRef.get();
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
 
-      if (user.exists) {
-          const userData = user.data();
-          let responseMessage = `Username: ${userData.name}\n`;
-          responseMessage += `Member since: ${userData.registered_at}\n`;
-          responseMessage += `User Type: ${userData.userType}\n`;
-          if (userData.userType === 'recruiter') {
-              responseMessage += `Recruiter Type: ${userData.recruiterType}\n`;
-              if (userData.recruiterType === 'company') {
-                  responseMessage += `Company Name: ${userData.companyName}\n`;
-              }
-          }
-          responseMessage += `Subscription Status: ${userData.subscription.status}\n`;
-          if (userData.subscription.expiry) {
-              responseMessage += `Subscription Expiry: ${userData.subscription.expiry}\n`;
-          }
-          responseMessage += `Score: ${userData.score}\n`;
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      const userTimeZone = userData.timeZone || 'UTC';
+      const registeredAt = moment.tz(userData.registered_at, userTimeZone).format('YYYY-MM-DD HH:mm');
 
-          bot.sendMessage(chatId, responseMessage);
-      } else {
-          bot.sendMessage(chatId, 'User not found. Please register first using /register.');
-      }
+      let responseMessage = `Username: ${userData.name}\n`;
+      responseMessage += `Member since: ${registeredAt}\n`;
+      responseMessage += `User Type: ${userData.userType}\n`;
+      responseMessage += `Recruiter Type: ${userData.recruiterType || 'N/A'}\n`;
+      responseMessage += `Subscription Status: ${userData.subscription.status}\n`;
+      responseMessage += `Subscription Expiry Date: ${userData.subscription.expiry ? moment.tz(userData.subscription.expiry, userTimeZone).format('YYYY-MM-DD HH:mm') : 'N/A'}\n`;
+      responseMessage += `Score: ${userData.score}\n`;
+      responseMessage += `Company Name: ${userData.companyName || 'N/A'}\n`;
+      responseMessage += `Time Zone: ${userData.timeZone || 'UTC'}\n`;
+
+      bot.sendMessage(chatId, responseMessage);
+    } else {
+      bot.sendMessage(chatId, 'User not found. Please register using /register.');
+    }
   } catch (error) {
-      console.error('Error handling /userinfo command:', error);
-      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    console.error('Error handling /userinfo command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
 
@@ -934,53 +932,52 @@ bot.onText(/\/meetingstatus/, async (msg) => {
 bot.onText(/\/meetinghistory/, async (msg) => {
   console.log('/meetinghistory command received');
   const chatId = msg.chat.id;
-  const now = new Date();
 
   try {
-      // Retrieve meeting commitments where the user is either the recruiter or the job seeker
-      const meetings = await db.collection('meetingCommitments')
-        .where('recruiter_id', '==', chatId)
-        .get();
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+    const userTimeZone = userDoc.data().timeZone || 'UTC';
 
-      const participantMeetings = await db.collection('meetingCommitments')
-        .where('counterpart_id', '==', chatId)
-        .get();
+    const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
 
-      const pastMeetings = [];
+    const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
-      meetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime <= now.setHours(now.getHours() - 2)) {
-              pastMeetings.push(data);
-          }
-      });
+    const pastMeetings = [];
 
-      participantMeetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime <= now.setHours(now.getHours() - 2)) {
-              pastMeetings.push(data);
-          }
-      });
-
-      pastMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
-
-      if (pastMeetings.length > 0) {
-          let responseMessage = 'Meeting History:\n';
-          pastMeetings.forEach((meeting, index) => {
-              responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
-              responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
-              responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
-              responseMessage += `   Description: ${meeting.description}\n\n`;
-          });
-          bot.sendMessage(chatId, responseMessage);
-      } else {
-          bot.sendMessage(chatId, 'No past meetings found.');
+    recruiterMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      if (meetingTime.isBefore(now.subtract(2, 'hours'))) {
+        pastMeetings.push(data);
       }
+    });
+
+    jobSeekerMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      if (meetingTime.isBefore(now.subtract(2, 'hours'))) {
+        pastMeetings.push(data);
+      }
+    });
+
+    pastMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
+
+    if (pastMeetings.length > 0) {
+      let responseMessage = 'Meeting History:\n';
+      pastMeetings.forEach((meeting, index) => {
+        responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
+        responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
+        responseMessage += `   Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   Description: ${meeting.description}\n\n`;
+      });
+      bot.sendMessage(chatId, responseMessage);
+    } else {
+      bot.sendMessage(chatId, 'No past meetings found.');
+    }
   } catch (error) {
-      console.error('Error handling /meetinghistory command:', error);
-      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    console.error('Error handling /meetinghistory command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
 
@@ -988,38 +985,44 @@ bot.onText(/\/meetinghistory/, async (msg) => {
 bot.onText(/\/feedbackstatus/, async (msg) => {
   console.log('/feedbackstatus command received');
   const chatId = msg.chat.id;
-  const now = new Date();
 
   try {
-    // Retrieve feedback commitments where the user is either the recruiter or the job seeker
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+    const userTimeZone = userDoc.data().timeZone || 'UTC';
+
+    const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
+
     const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
     const jobSeekerFeedbacks = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId).get();
 
     const upcomingFeedbacks = [];
+
     recruiterFeedbacks.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime > now) {
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      if (feedbackTime.isAfter(now)) {
         upcomingFeedbacks.push(data);
       }
     });
 
     jobSeekerFeedbacks.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime > now) {
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      if (feedbackTime.isAfter(now)) {
         upcomingFeedbacks.push(data);
       }
     });
 
-    upcomingFeedbacks.sort((a, b) => new Date(a.feedback_scheduled_at) - new Date(b.feedback_scheduled_at));
+    upcomingFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
 
     if (upcomingFeedbacks.length > 0) {
       let responseMessage = 'Scheduled Feedbacks:\n';
       upcomingFeedbacks.forEach((feedback, index) => {
         responseMessage += `${index + 1}. Job Seeker Name: ${feedback.counterpart_name}\n`;
         responseMessage += `   Recruiter Name: ${feedback.recruiter_name}\n`;
-        responseMessage += `   Feedback Scheduled Time: ${feedback.feedback_scheduled_at}\n\n`;
+        responseMessage += `   Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   Description: ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage);
     } else {
@@ -1035,38 +1038,44 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
 bot.onText(/\/feedbackhistory/, async (msg) => {
   console.log('/feedbackhistory command received');
   const chatId = msg.chat.id;
-  const now = new Date();
 
   try {
-    // Retrieve feedback commitments where the user is either the recruiter or the job seeker
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+    const userTimeZone = userDoc.data().timeZone || 'UTC';
+
+    const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
+
     const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
     const jobSeekerFeedbacks = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId).get();
 
     const pastFeedbacks = [];
+
     recruiterFeedbacks.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime <= now) {
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      if (feedbackTime.isBefore(now)) {
         pastFeedbacks.push(data);
       }
     });
 
     jobSeekerFeedbacks.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = new Date(data.feedback_scheduled_at);
-      if (feedbackTime <= now) {
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      if (feedbackTime.isBefore(now)) {
         pastFeedbacks.push(data);
       }
     });
 
-    pastFeedbacks.sort((a, b) => new Date(a.feedback_scheduled_at) - new Date(b.feedback_scheduled_at));
+    pastFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
 
     if (pastFeedbacks.length > 0) {
       let responseMessage = 'Feedback History:\n';
       pastFeedbacks.forEach((feedback, index) => {
         responseMessage += `${index + 1}. Job Seeker Name: ${feedback.counterpart_name}\n`;
         responseMessage += `   Recruiter Name: ${feedback.recruiter_name}\n`;
-        responseMessage += `   Feedback Scheduled Time: ${feedback.feedback_scheduled_at}\n\n`;
+        responseMessage += `   Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   Description: ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage);
     } else {
