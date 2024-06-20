@@ -444,7 +444,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
 
       const userRef = db.collection('users').doc(chatId.toString());
       const userDoc = await userRef.get();
-
+      
       if (userDoc.exists && userDoc.data().userType === 'recruiter') {
         const user = userDoc.data();
         const now = new Date();
@@ -475,7 +475,8 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         description: description,
         request_submitted: false,
         counterpart_accepted: false,
-        meeting_duration: null // Initialize meeting duration
+        meeting_duration: null, // Initialize meeting duration
+        selected_dates: [] // Initialize selected dates
       });
       console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
 
@@ -518,7 +519,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       await requestRef.update({ meeting_duration: duration });
 
-      // Ask user to choose date
+      // Ask user to choose up to 3 dates
       const dates = [];
       const now = new Date();
       for (let i = 0; i < 14; i++) {
@@ -535,7 +536,7 @@ bot.on('callback_query', async (callbackQuery) => {
         }
       };
 
-      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
+      bot.sendMessage(chatId, 'Please choose up to 3 dates for the meeting:', opts);
     } catch (error) {
       console.error('Error updating meeting duration:', error);
       bot.sendMessage(chatId, 'There was an error updating the meeting duration. Please try again.');
@@ -545,20 +546,76 @@ bot.on('callback_query', async (callbackQuery) => {
     const meetingRequestId = data[3];
     console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    const availableTimes = [];
-    for (let hour = 9; hour <= 19; hour++) {
-      availableTimes.push(`${hour}:00`, `${hour}:30`);
-    }
+    try {
+      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+      const request = await requestRef.get();
 
-    const opts = {
-      reply_markup: {
-        inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
-        ])
+      if (request.exists) {
+        const selectedDates = request.data().selected_dates || [];
+
+        if (selectedDates.length < 3) {
+          selectedDates.push(date);
+          await requestRef.update({ selected_dates: selectedDates });
+
+          bot.sendMessage(chatId, `Added date: ${date}`);
+
+          if (selectedDates.length < 3) {
+            bot.sendMessage(chatId, 'You can choose more dates or proceed to select time slots for the chosen dates.');
+          }
+
+          if (selectedDates.length === 3) {
+            const opts = {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: 'Proceed to select time slots', callback_data: `proceed_timeslot_meeting_${meetingRequestId}` }],
+                  [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
+                ]
+              }
+            };
+            bot.sendMessage(chatId, 'You have selected 3 dates. Do you want to proceed to select time slots?', opts);
+          }
+        } else {
+          bot.sendMessage(chatId, 'You have already selected 3 dates.');
+        }
+      } else {
+        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
       }
-    };
+    } catch (error) {
+      console.error('Error adding date:', error);
+      bot.sendMessage(chatId, 'There was an error adding the date. Please try again.');
+    }
+  } else if (data[0] === 'proceed' && data[1] === 'timeslot' && data[2] === 'meeting') {
+    const meetingRequestId = data[3];
 
-    bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
+    try {
+      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+      const request = await requestRef.get();
+
+      if (request.exists) {
+        const selectedDates = request.data().selected_dates;
+        const availableTimes = [];
+        for (let hour = 9; hour <= 19; hour++) {
+          availableTimes.push(`${hour}:00`, `${hour}:30`);
+        }
+
+        selectedDates.forEach(date => {
+          const opts = {
+            reply_markup: {
+              inline_keyboard: availableTimes.map(time => [
+                { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
+              ])
+            }
+          };
+
+          bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
+        });
+      } else {
+        bot.sendMessage(chatId, 'Meeting request not found.');
+      }
+    } catch (error) {
+      console.error('Error proceeding to time slot selection:', error);
+      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    }
   } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
     const meetingRequestId = data[3];
     const date = data[4];
@@ -677,12 +734,9 @@ bot.on('callback_query', async (callbackQuery) => {
             counterpart_commitment_state: 'pending_meeting',
             meeting_duration: meeting_duration // Include meeting duration
           });
-          const userRef = db.collection('users').doc(chatId.toString());
-          const userDoc = await userRef.get();
-          const userTimeZone = userDoc.data().timeZone || 'UTC';
                 // Notify both parties
-                bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${moment.tz(selectedTimeSlot, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
-                bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${moment.tz(selectedTimeSlot, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
+                bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+                bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
 
                 // Schedule feedback request generation after 2.5 hours
                 setTimeout(async () => {
@@ -775,7 +829,7 @@ bot.on('callback_query', async (callbackQuery) => {
           counterpart_commitment_state: 'pending_feedback'
         });
 
-        bot.sendMessage(counterpart_id, `The recruiter will provide feedback by ${moment.tz(feedbackDueDate, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
+        bot.sendMessage(counterpart_id, `The recruiter will provide feedback by ${new Date(feedbackDueDate).toLocaleString()}.`);
         bot.sendMessage(chatId, 'Feedback request approved.');
       } else {
         bot.sendMessage(chatId, 'Feedback request not found.');
@@ -803,48 +857,6 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error declining feedback request:', error);
       bot.sendMessage(chatId, 'There was an error declining the feedback request. Please try again.');
     }
-  }
-});
-
-// Handle /feedbackdays command
-bot.onText(/\/feedbackdays (\d+)/, async (msg, match) => {
-  console.log('/feedbackdays command received');
-  const chatId = msg.chat.id;
-  const [days] = match.slice(1);
-
-  try {
-    // Retrieve the user's time zone from the database
-    const userRef = db.collection('users').doc(chatId.toString());
-    const userDoc = await userRef.get();
-    const userTimeZone = userDoc.data().timeZone || 'UTC';
-
-    const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
-    const feedbackRequest = await feedbackRequestRef.get();
-
-    if (feedbackRequest.exists) {
-      const feedbackDueDate = new Date();
-      feedbackDueDate.setDate(feedbackDueDate.getDate() + parseInt(days));
-
-      await feedbackRequestRef.update({ feedback_due_date: feedbackDueDate.toISOString() });
-
-      const opts = {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: 'Approve', callback_data: `approve_feedback_${feedbackRequestId}_${feedbackDueDate.toISOString()}` },
-              { text: 'Decline', callback_data: `decline_feedback_${feedbackRequestId}` }
-            ]
-          ]
-        }
-      };
-
-      bot.sendMessage(feedbackRequest.data().counterpart_id, `You have a feedback request from @${msg.from.username} for the meeting "${feedbackRequest.data().description}". Feedback will be provided by ${moment.tz(feedbackDueDate, userTimeZone).format('YYYY-MM-DD HH:mm')}. Do you approve?`, opts);
-    } else {
-      bot.sendMessage(chatId, 'Feedback request not found.');
-    }
-  } catch (error) {
-    console.error('Error handling feedback days:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
 
