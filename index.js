@@ -52,6 +52,9 @@ const db = admin.firestore();
 const app = express();
 app.use(bodyParser.raw({ type: 'application/json' })); // Stripe requires the raw body to construct the event
 
+//Set Not allowed commands for users with expired subscriptions
+const notAllowedCommands = ['/meeting', '/meetingstatus', '/meetinghistory', '/feedbackstatus', '/feedbackhistory'];
+
 // Telegram bot token from BotFather
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -169,10 +172,8 @@ bot.onText(/\/register/, async (msg) => {
           });
           console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
 
-          bot.sendMessage(chatId, `Hello, ${userName}! Your registration is complete. You are all set! You can now schedule your first meeting or wait for incoming requests. You can also change your role to recruiter if needed using /setrecruiter`);
-
           // Ask for the user's time zone
-          bot.sendMessage(chatId, "Please select your time zone:", {
+          bot.sendMessage(chatId, `Hello, ${userName}! Please select your time zone:`, {
               reply_markup: {
                   inline_keyboard: [
                       [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_UTC-12:00" }],
@@ -199,7 +200,7 @@ bot.onText(/\/register/, async (msg) => {
                       [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_UTC+09:00" }],
                       [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_UTC+10:00" }],
                       [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_UTC+11:00" }],
-                      [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_UTC+12:00" }],
+                      [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_UTC+12:00" }]
                   ]
               }
           });
@@ -225,6 +226,7 @@ bot.on('callback_query', async (callbackQuery) => {
       });
 
       bot.sendMessage(chatId, `Your time zone has been set to ${timeZone}.`);
+      bot.sendMessage(chatId, 'Your registration is complete. You are all set! You can now schedule your first meeting or wait for incoming requests. You can also change your role to recruiter if needed using /setrecruiter');
   }
 });
 
@@ -1437,7 +1439,7 @@ const handleUnsubscribe = async (customerId) => {
   }
 };
 
-// Middleware to check subscription status with time zone
+// Middleware to check subscription status
 const checkSubscription = async (req, res, next) => {
   if (req.body.message) {
     const chatId = req.body.message.chat.id.toString();
@@ -1446,20 +1448,23 @@ const checkSubscription = async (req, res, next) => {
 
     if (userDoc.exists) {
       const user = userDoc.data();
-      const userTimeZone = user.timeZone || 'UTC';
-      const now = moment.tz(userTimeZone);
-      const expiryDate = moment.tz(user.subscription.expiry, userTimeZone);
+      const command = req.body.message.text.split(' ')[0];
+
+      if (!notAllowedCommands.includes(command)) {
+        return next();
+      }
 
       if (user.userType === 'recruiter') {
-        if (user.subscription.status === 'trial' && now.isAfter(expiryDate)) {
+        const now = new Date();
+        const expiryDate = new Date(user.subscription.expiry);
+
+        if (user.subscription.status === 'trial' && now >= expiryDate) {
           await userRef.update({
             'subscription.status': 'expired'
           });
           bot.sendMessage(chatId, 'Your trial period has expired. Please subscribe to continue using the service.');
         } else if (user.subscription.status === 'expired') {
-          const allowedCommands = ['/start', '/userinfo', '/setrecruiter', '/setjobseeker', '/subscribe'];
-          const command = req.body.message.text.split(' ')[0];
-          if (!allowedCommands.includes(command)) {
+          if (notAllowedCommands.includes(command)) {
             bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
             return;
           }
