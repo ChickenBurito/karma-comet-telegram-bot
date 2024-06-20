@@ -150,64 +150,65 @@ bot.onText(/\/register/, async (msg) => {
   const userName = msg.from.username || 'User';
 
   try {
-      const userRef = db.collection('users').doc(chatId.toString());
-      const userDoc = await userRef.get();
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
 
-      if (userDoc.exists) {
-          console.log(`User ${userName} with chat ID: ${chatId} is already registered.`);
-          bot.sendMessage(chatId, 'You are already registered.');
-      } else {
-          console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
-          await userRef.set({
-              name: userName,
-              chatId: chatId,
-              registered_at: new Date().toISOString(),
-              score: 0,
-              userType: 'jobSeeker', // Default user type
-              isAdmin: false,
-              subscription: {
-                  status: 'free',
-                  expiry: null
-              }
-          });
-          console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
+    if (userDoc.exists) {
+      console.log(`User ${userName} with chat ID: ${chatId} is already registered.`);
+      bot.sendMessage(chatId, 'You are already registered.');
+    } else {
+      console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
+      await userRef.set({
+        name: userName,
+        chatId: chatId,
+        registered_at: new Date().toISOString(),
+        score: 0,
+        userType: 'jobSeeker', // Default user type
+        isAdmin: false,
+        subscription: {
+          status: 'free',
+          expiry: null
+        },
+        timeZone: null // Initialize timeZone as null
+      });
+      console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
 
-          // Ask for the user's time zone
-          bot.sendMessage(chatId, `Hello, ${userName}! Please select your time zone:`, {
-              reply_markup: {
-                  inline_keyboard: [
-                      [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_UTC-12:00" }],
-                      [{ text: "UTC-11:00 (American Samoa)", callback_data: "timezone_UTC-11:00" }],
-                      [{ text: "UTC-10:00 (Hawaii)", callback_data: "timezone_UTC-10:00" }],
-                      [{ text: "UTC-09:00 (Alaska)", callback_data: "timezone_UTC-09:00" }],
-                      [{ text: "UTC-08:00 (Pacific Time)", callback_data: "timezone_UTC-08:00" }],
-                      [{ text: "UTC-07:00 (Mountain Time)", callback_data: "timezone_UTC-07:00" }],
-                      [{ text: "UTC-06:00 (Central Time)", callback_data: "timezone_UTC-06:00" }],
-                      [{ text: "UTC-05:00 (Eastern Time)", callback_data: "timezone_UTC-05:00" }],
-                      [{ text: "UTC-04:00 (Atlantic Time)", callback_data: "timezone_UTC-04:00" }],
-                      [{ text: "UTC-03:00 (Argentina)", callback_data: "timezone_UTC-03:00" }],
-                      [{ text: "UTC-02:00 (South Georgia)", callback_data: "timezone_UTC-02:00" }],
-                      [{ text: "UTC-01:00 (Azores)", callback_data: "timezone_UTC-01:00" }],
-                      [{ text: "UTC+00:00 (London)", callback_data: "timezone_UTC+00:00" }],
-                      [{ text: "UTC+01:00 (Berlin)", callback_data: "timezone_UTC+01:00" }],
-                      [{ text: "UTC+02:00 (Cairo)", callback_data: "timezone_UTC+02:00" }],
-                      [{ text: "UTC+03:00 (Moscow)", callback_data: "timezone_UTC+03:00" }],
-                      [{ text: "UTC+04:00 (Dubai)", callback_data: "timezone_UTC+04:00" }],
-                      [{ text: "UTC+05:00 (Karachi)", callback_data: "timezone_UTC+05:00" }],
-                      [{ text: "UTC+06:00 (Dhaka)", callback_data: "timezone_UTC+06:00" }],
-                      [{ text: "UTC+07:00 (Bangkok)", callback_data: "timezone_UTC+07:00" }],
-                      [{ text: "UTC+08:00 (Singapore)", callback_data: "timezone_UTC+08:00" }],
-                      [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_UTC+09:00" }],
-                      [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_UTC+10:00" }],
-                      [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_UTC+11:00" }],
-                      [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_UTC+12:00" }]
-                  ]
-              }
-          });
-      }
+      // Ask for the user's time zone
+      bot.sendMessage(chatId, "Please select your time zone:", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_UTC-12:00" }],
+            [{ text: "UTC-11:00 (American Samoa)", callback_data: "timezone_UTC-11:00" }],
+            [{ text: "UTC-10:00 (Hawaii)", callback_data: "timezone_UTC-10:00" }],
+            [{ text: "UTC-09:00 (Alaska)", callback_data: "timezone_UTC-09:00" }],
+            [{ text: "UTC-08:00 (Pacific Time)", callback_data: "timezone_UTC-08:00" }],
+            [{ text: "UTC-07:00 (Mountain Time)", callback_data: "timezone_UTC-07:00" }],
+            [{ text: "UTC-06:00 (Central Time)", callback_data: "timezone_UTC-06:00" }],
+            [{ text: "UTC-05:00 (Eastern Time)", callback_data: "timezone_UTC-05:00" }],
+            [{ text: "UTC-04:00 (Atlantic Time)", callback_data: "timezone_UTC-04:00" }],
+            [{ text: "UTC-03:00 (Argentina)", callback_data: "timezone_UTC-03:00" }],
+            [{ text: "UTC-02:00 (South Georgia)", callback_data: "timezone_UTC-02:00" }],
+            [{ text: "UTC-01:00 (Azores)", callback_data: "timezone_UTC-01:00" }],
+            [{ text: "UTC+00:00 (London)", callback_data: "timezone_UTC+00:00" }],
+            [{ text: "UTC+01:00 (Berlin)", callback_data: "timezone_UTC+01:00" }],
+            [{ text: "UTC+02:00 (Cairo)", callback_data: "timezone_UTC+02:00" }],
+            [{ text: "UTC+03:00 (Moscow)", callback_data: "timezone_UTC+03:00" }],
+            [{ text: "UTC+04:00 (Dubai)", callback_data: "timezone_UTC+04:00" }],
+            [{ text: "UTC+05:00 (Karachi)", callback_data: "timezone_UTC+05:00" }],
+            [{ text: "UTC+06:00 (Dhaka)", callback_data: "timezone_UTC+06:00" }],
+            [{ text: "UTC+07:00 (Bangkok)", callback_data: "timezone_UTC+07:00" }],
+            [{ text: "UTC+08:00 (Singapore)", callback_data: "timezone_UTC+08:00" }],
+            [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_UTC+09:00" }],
+            [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_UTC+10:00" }],
+            [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_UTC+11:00" }],
+            [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_UTC+12:00" }],
+          ]
+        }
+      });
+    }
   } catch (error) {
-      console.error('Error registering user:', error);
-      bot.sendMessage(chatId, 'There was an error processing your registration. Please try again.');
+    console.error('Error registering user:', error);
+    bot.sendMessage(chatId, 'There was an error processing your registration. Please try again.');
   }
 });
 
@@ -218,15 +219,21 @@ bot.on('callback_query', async (callbackQuery) => {
   const data = callbackQuery.data;
 
   if (data.startsWith('timezone_')) {
-      const timeZone = data.split('_')[1];
+    const timeZone = data.split('_')[1];
 
-      const userRef = db.collection('users').doc(chatId.toString());
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+
+    if (userDoc.exists && !userDoc.data().timeZone) { // Check if timezone is not already set
       await userRef.update({
-          timeZone: timeZone
+        timeZone: timeZone
       });
 
       bot.sendMessage(chatId, `Your time zone has been set to ${timeZone}.`);
-      bot.sendMessage(chatId, 'Your registration is complete. You are all set! You can now schedule your first meeting or wait for incoming requests. You can also change your role to recruiter if needed using /setrecruiter');
+      bot.sendMessage(chatId, `Hello, ${userDoc.data().name}! Your registration is complete. You are all set! You can now schedule your first meeting or wait for incoming requests. You can also change your role to recruiter if needed using /setrecruiter.`);
+    } else {
+      bot.sendMessage(chatId, 'You have already set your time zone.');
+    }
   }
 });
 
