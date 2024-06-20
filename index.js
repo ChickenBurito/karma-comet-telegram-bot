@@ -1,3 +1,7 @@
+////************************************************////
+//////++///// KarmaComet Telegram Chatbot /////++//////
+////**********************************************////
+
 require('dotenv').config();
 
 const express = require('express');
@@ -877,53 +881,52 @@ bot.onText(/\/userinfo/, async (msg) => {
 bot.onText(/\/meetingstatus/, async (msg) => {
   console.log('/meetingstatus command received');
   const chatId = msg.chat.id;
-  const now = new Date();
 
   try {
-      // Retrieve meeting commitments where the user is either the recruiter or the job seeker
-      const meetings = await db.collection('meetingCommitments')
-        .where('recruiter_id', '==', chatId)
-        .get();
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+    const userTimeZone = userDoc.data().timeZone || 'UTC';
 
-      const participantMeetings = await db.collection('meetingCommitments')
-        .where('counterpart_id', '==', chatId)
-        .get();
+    const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
 
-      const upcomingMeetings = [];
+    const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
-      meetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime > now.setHours(now.getHours() - 2)) {
-              upcomingMeetings.push(data);
-          }
-      });
+    const upcomingMeetings = [];
 
-      participantMeetings.forEach(doc => {
-          const data = doc.data();
-          const meetingTime = new Date(data.meeting_scheduled_at);
-          if (meetingTime > now.setHours(now.getHours() - 2)) {
-              upcomingMeetings.push(data);
-          }
-      });
-
-      upcomingMeetings.sort((a, b) => new Date(a.meeting_scheduled_at) - new Date(b.meeting_scheduled_at));
-
-      if (upcomingMeetings.length > 0) {
-          let responseMessage = 'Scheduled Meetings:\n';
-          upcomingMeetings.forEach((meeting, index) => {
-              responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
-              responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
-              responseMessage += `   Meeting Scheduled Time: ${meeting.meeting_scheduled_at}\n`;
-              responseMessage += `   Description: ${meeting.description}\n\n`;
-          });
-          bot.sendMessage(chatId, responseMessage);
-      } else {
-          bot.sendMessage(chatId, 'No upcoming meetings found.');
+    recruiterMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      if (meetingTime.isAfter(now.subtract(2, 'hours'))) {
+        upcomingMeetings.push(data);
       }
+    });
+
+    jobSeekerMeetings.forEach(doc => {
+      const data = doc.data();
+      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      if (meetingTime.isAfter(now.subtract(2, 'hours'))) {
+        upcomingMeetings.push(data);
+      }
+    });
+
+    upcomingMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
+
+    if (upcomingMeetings.length > 0) {
+      let responseMessage = 'Scheduled Meetings:\n';
+      upcomingMeetings.forEach((meeting, index) => {
+        responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
+        responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
+        responseMessage += `   Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   Description: ${meeting.description}\n\n`;
+      });
+      bot.sendMessage(chatId, responseMessage);
+    } else {
+      bot.sendMessage(chatId, 'No upcoming meetings found.');
+    }
   } catch (error) {
-      console.error('Error handling /meetingstatus command:', error);
-      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    console.error('Error handling /meetingstatus command:', error);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
   }
 });
 
@@ -1194,8 +1197,8 @@ bot.on('callback_query', async (callbackQuery) => {
   }
 });
 
-////******************////
-// Subscription logic
+////*******************////
+/// Subscription logic ///
 ////******************////  
 
 // Webhook endpoint
@@ -1384,7 +1387,7 @@ const handleUnsubscribe = async (customerId) => {
   }
 };
 
-// Middleware to check subscription status
+// Middleware to check subscription status with time zone
 const checkSubscription = async (req, res, next) => {
   if (req.body.message) {
     const chatId = req.body.message.chat.id.toString();
@@ -1393,11 +1396,12 @@ const checkSubscription = async (req, res, next) => {
 
     if (userDoc.exists) {
       const user = userDoc.data();
-      if (user.userType === 'recruiter') {
-        const now = new Date();
-        const expiryDate = new Date(user.subscription.expiry);
+      const userTimeZone = user.timeZone || 'UTC';
+      const now = moment.tz(userTimeZone);
+      const expiryDate = moment.tz(user.subscription.expiry, userTimeZone);
 
-        if (user.subscription.status === 'trial' && now >= expiryDate) {
+      if (user.userType === 'recruiter') {
+        if (user.subscription.status === 'trial' && now.isAfter(expiryDate)) {
           await userRef.update({
             'subscription.status': 'expired'
           });
