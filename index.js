@@ -125,13 +125,13 @@ bot.onText(/\/start/, (msg) => {
   📋 *User Guide:*
 
   *Step 1:* Registration 📖
-  - */register*: Register yourself as a job seeker using your Telegram username.
+  - */register*: Register with your Telegram username.
   - */setrecruiter*: Switch your role to a recruiter to use recruiter features.
   - */setjobseeker*: Switch your role back to a job seeker if needed.
 
   *Step 2:* Scheduling a meeting 📅
   - */meeting @username description*: Schedule a meeting with a job seeker using his Telegram username and a meeting title.
-  *Note:* Feedback will be scheduled automatically 2,5 hours after a meeting.
+  *Note:* Feedback will be scheduled automatically after a meeting.
 
   🔎 Check your user profile, meetings and feedbacks statuses anytime!
   - */userinfo*: Check your user profile.
@@ -151,13 +151,12 @@ bot.onText(/\/start/, (msg) => {
   const opts = {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '➡ *Register*', callback_data: 'register' }]
+        [{ text: '➡ Register', callback_data: 'register' }]
       ]
-    },
-    parse_mode: 'Markdown'
+    }
   };
 
-  bot.sendMessage(chatId, '⬇ Click *Register* to begin 🪄!', { parse_mode: 'Markdown', reply_markup: opts.reply_markup });
+  bot.sendMessage(chatId, '⬇ Click *Register* to begin ⬇', { parse_mode: 'Markdown', reply_markup: opts.reply_markup });
 });
 
 // Handle callback for register button
@@ -167,8 +166,8 @@ bot.on('callback_query', async (callbackQuery) => {
   const data = callbackQuery.data;
 
   if (data === 'register') {
-    // Trigger the /register command by sending a message object
-    bot.emit('message', { chat: { id: chatId }, text: '/register', from: callbackQuery.from });
+    // Trigger the /register command by calling the register function directly
+    registerUser(callbackQuery.message, chatId);
   } else if (data === 'setrecruiter') {
     bot.emit('message', { chat: { id: chatId }, text: '/setrecruiter', from: callbackQuery.from });
   } else if (data === 'continue_jobseeker') {
@@ -183,7 +182,10 @@ bot.on('callback_query', async (callbackQuery) => {
 // Handle /register command with telegram username
 bot.onText(/\/register/, async (msg) => {
   console.log('/register command received');
-  const chatId = msg.chat.id;
+  registerUser(msg, msg.chat.id);
+});
+
+const registerUser = async (msg, chatId) => {
   const userName = msg.from.username || 'User';
 
   try {
@@ -247,7 +249,7 @@ bot.onText(/\/register/, async (msg) => {
     console.error('Error registering user:', error);
     bot.sendMessage(chatId, '🛠 There was an error processing your registration. Please try again.');
   }
-});
+};
 
 // Handle callback for time zone selection
 bot.on('callback_query', async (callbackQuery) => {
