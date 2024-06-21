@@ -53,7 +53,7 @@ const db = admin.firestore();
 const app = express();
 app.use(bodyParser.raw({ type: 'application/json' })); // Stripe requires the raw body to construct the event
 
-//Set Not allowed commands for users with expired subscriptions
+//****IMPORTANT******// Set Not allowed commands for users with expired subscriptions //******IMPORTANT******//
 const notAllowedCommands = ['/meeting', '/meetingstatus', '/meetinghistory', '/feedbackstatus', '/feedbackhistory'];
 
 // Telegram bot token from BotFather
@@ -887,7 +887,6 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
     const userTimeZone = userDoc.data().timeZone || 'UTC';
-
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
 
     const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
@@ -898,7 +897,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     recruiterMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      if (meetingTime.isAfter(now.subtract(2, 'hours'))) {
+      if (meetingTime.isAfter(now)) {
         upcomingMeetings.push(data);
       }
     });
@@ -906,7 +905,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     jobSeekerMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      if (meetingTime.isAfter(now.subtract(2, 'hours'))) {
+      if (meetingTime.isAfter(now)) {
         upcomingMeetings.push(data);
       }
     });
@@ -914,20 +913,20 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     upcomingMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
 
     if (upcomingMeetings.length > 0) {
-      let responseMessage = 'Scheduled Meetings:\n';
+      let responseMessage = '📂 Your Scheduled Meetings:\n';
       upcomingMeetings.forEach((meeting, index) => {
-        responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
-        responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
-        responseMessage += `   Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   Description: ${meeting.description}\n\n`;
+        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${meeting.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 Recruiter Name: ${meeting.recruiter_name}\n`;
+        responseMessage += `   📅 Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 Description: ${meeting.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage);
     } else {
-      bot.sendMessage(chatId, 'No upcoming meetings found.');
+      bot.sendMessage(chatId, '🤷 No upcoming meetings found.');
     }
   } catch (error) {
     console.error('Error handling /meetingstatus command:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your request. Please try again.');
   }
 });
 
@@ -940,7 +939,6 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
     const userTimeZone = userDoc.data().timeZone || 'UTC';
-
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
 
     const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
@@ -951,7 +949,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     recruiterMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      if (meetingTime.isBefore(now.subtract(2, 'hours'))) {
+      if (meetingTime.isBefore(now)) {
         pastMeetings.push(data);
       }
     });
@@ -959,7 +957,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     jobSeekerMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      if (meetingTime.isBefore(now.subtract(2, 'hours'))) {
+      if (meetingTime.isBefore(now)) {
         pastMeetings.push(data);
       }
     });
@@ -967,20 +965,20 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     pastMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
 
     if (pastMeetings.length > 0) {
-      let responseMessage = 'Meeting History:\n';
+      let responseMessage = '🗄 Meeting History:\n';
       pastMeetings.forEach((meeting, index) => {
-        responseMessage += `${index + 1}. Job Seeker Name: ${meeting.counterpart_name}\n`;
-        responseMessage += `   Recruiter Name: ${meeting.recruiter_name}\n`;
-        responseMessage += `   Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   Description: ${meeting.description}\n\n`;
+        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${meeting.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 Recruiter Name: ${meeting.recruiter_name}\n`;
+        responseMessage += `   📅 Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 Description: ${meeting.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage);
     } else {
-      bot.sendMessage(chatId, 'No past meetings found.');
+      bot.sendMessage(chatId, '🤷 No past meetings found.');
     }
   } catch (error) {
     console.error('Error handling /meetinghistory command:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your request. Please try again.');
   }
 });
 
@@ -993,7 +991,6 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
     const userTimeZone = userDoc.data().timeZone || 'UTC';
-
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
 
     const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
@@ -1020,20 +1017,20 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
     upcomingFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
 
     if (upcomingFeedbacks.length > 0) {
-      let responseMessage = 'Scheduled Feedbacks:\n';
+      let responseMessage = '🗓 Scheduled Feedbacks:\n';
       upcomingFeedbacks.forEach((feedback, index) => {
-        responseMessage += `${index + 1}. Job Seeker Name: ${feedback.counterpart_name}\n`;
-        responseMessage += `   Recruiter Name: ${feedback.recruiter_name}\n`;
-        responseMessage += `   Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   Description: ${feedback.description}\n\n`;
+        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${feedback.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 Recruiter Name: ${feedback.recruiter_name}\n`;
+        responseMessage += `   📅 Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 Description: ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage);
     } else {
-      bot.sendMessage(chatId, 'No upcoming feedbacks found.');
+      bot.sendMessage(chatId, '🤷 No upcoming feedbacks found.');
     }
   } catch (error) {
     console.error('Error handling /feedbackstatus command:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your request. Please try again.');
   }
 });
 
@@ -1046,7 +1043,6 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
     const userTimeZone = userDoc.data().timeZone || 'UTC';
-
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
 
     const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
@@ -1073,20 +1069,20 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
     pastFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
 
     if (pastFeedbacks.length > 0) {
-      let responseMessage = 'Feedback History:\n';
+      let responseMessage = '🗃 Feedback History:\n';
       pastFeedbacks.forEach((feedback, index) => {
-        responseMessage += `${index + 1}. Job Seeker Name: ${feedback.counterpart_name}\n`;
-        responseMessage += `   Recruiter Name: ${feedback.recruiter_name}\n`;
-        responseMessage += `   Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   Description: ${feedback.description}\n\n`;
+        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${feedback.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 Recruiter Name: ${feedback.recruiter_name}\n`;
+        responseMessage += `   📅 Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 Description: ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage);
     } else {
-      bot.sendMessage(chatId, 'No past feedbacks found.');
+      bot.sendMessage(chatId, '🤷 No past feedbacks found.');
     }
   } catch (error) {
     console.error('Error handling /feedbackhistory command:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your request. Please try again.');
   }
 });
 
