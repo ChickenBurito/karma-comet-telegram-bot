@@ -445,15 +445,6 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   const [counterpartUsername, description] = match.slice(1);
 
   try {
-    const userRef = db.collection('users').doc(chatId.toString());
-    const userDoc = await userRef.get();
-
-    // Check if user exists and is a recruiter
-    if (!userDoc.exists || userDoc.data().userType !== 'recruiter') {
-      bot.sendMessage(chatId, 'Only recruiters can create a meeting request.');
-      return;
-    }
-
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
 
     if (!counterpartRef.empty) {
@@ -461,13 +452,18 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const counterpartId = counterpart.id;
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
-      const user = userDoc.data();
-      const now = new Date();
-      const expiryDate = new Date(user.subscription.expiry);
+      const userRef = db.collection('users').doc(chatId.toString());
+      const userDoc = await userRef.get();
+      
+      if (userDoc.exists && userDoc.data().userType === 'recruiter') {
+        const user = userDoc.data();
+        const now = new Date();
+        const expiryDate = new Date(user.subscription.expiry);
 
-      if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
-        bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
-        return;
+        if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
+          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+          return;
+        }
       }
 
       const recruiterCompanyName = msg.from.company_name || '';
@@ -489,7 +485,8 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         description: description,
         request_submitted: false,
         counterpart_accepted: false,
-        meeting_duration: null // Initialize meeting duration
+        meeting_duration: null, // Initialize meeting duration
+        dates: []
       });
       console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
 
@@ -580,20 +577,48 @@ bot.on('callback_query', async (callbackQuery) => {
     const meetingRequestId = data[3];
     console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    const availableTimes = [];
-    for (let hour = 9; hour <= 19; hour++) {
-      availableTimes.push(`${hour}:00`, `${hour}:30`);
-    }
+    const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+    const request = await requestRef.get();
 
-    const opts = {
-      reply_markup: {
-        inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
-        ])
+    if (request.exists) {
+      const dates = request.data().dates || [];
+
+      if (dates.length < 3) {
+        dates.push(date);
+        await requestRef.update({ dates: dates });
+
+        const availableTimes = [];
+        for (let hour = 9; hour <= 19; hour++) {
+          availableTimes.push(`${hour}:00`, `${hour}:30`);
+        }
+
+        const opts = {
+          reply_markup: {
+            inline_keyboard: availableTimes.map(time => [
+              { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
+            ])
+          }
+        };
+
+        bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
+
+        if (dates.length < 3) {
+          bot.sendMessage(chatId, 'You can choose up to 3 dates. Would you like to add another date?', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'Add another date', callback_data: `add_date_meeting_${meetingRequestId}` }],
+                [{ text: 'Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }],
+                [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
+              ]
+            }
+          });
+        }
+      } else {
+        bot.sendMessage(chatId, 'You have already selected the maximum of 3 dates.');
       }
-    };
-
-    bot.sendMessage(chatId, `Please choose up to 3 available time slots for ${date}:`, opts);
+    } else {
+      bot.sendMessage(chatId, 'Meeting request not found.');
+    }
   } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
     const meetingRequestId = data[3];
     const date = data[4];
@@ -605,16 +630,21 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const timeSlots = request.data().timeslots;
+        const timeSlots = request.data().timeslots || [];
 
-        if (timeSlots.length < 3) {
+        const dateSlots = timeSlots.filter(slot => slot.startsWith(date));
+
+        if (dateSlots.length < 5) {
           timeSlots.push(`${date} ${time}`);
           await requestRef.update({ timeslots: timeSlots });
 
           bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
 
-          if (timeSlots.length >= 1) {
-            // Ask user if they want to create the meeting request
+          if (dateSlots.length + 1 >= 5) {
+            bot.sendMessage(chatId, 'You have already selected the maximum of 5 time slots for this date.');
+          }
+
+          if (timeSlots.length >= 1 && timeSlots.length <= 15) {
             const opts = {
               reply_markup: {
                 inline_keyboard: [
@@ -626,15 +656,36 @@ bot.on('callback_query', async (callbackQuery) => {
             bot.sendMessage(chatId, 'Do you want to submit the meeting request now?', opts);
           }
         } else {
-          bot.sendMessage(chatId, 'You have already selected 3 time slots.');
+          bot.sendMessage(chatId, 'You have already selected 5 time slots for this date.');
         }
       } else {
-        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
+        bot.sendMessage(chatId, 'Meeting request not found.');
       }
     } catch (error) {
       console.error('Error adding time slot:', error);
       bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
     }
+  } else if (data[0] === 'add' && data[1] === 'date' && data[2] === 'meeting') {
+    const meetingRequestId = data[3];
+
+    // Ask user to choose date
+    const dates = [];
+    const now = new Date();
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(now);
+      date.setDate(now.getDate() + i);
+      dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
+    }
+
+    const opts = {
+      reply_markup: {
+        inline_keyboard: dates.map(date => [
+          { text: date, callback_data: `choose_date_meeting_${meetingRequestId}_${date}` }
+        ])
+      }
+    };
+
+    bot.sendMessage(chatId, 'Please choose another date for the meeting:', opts);
   } else if (data[0] === 'submit' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
 
