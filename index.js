@@ -269,7 +269,7 @@ bot.on('callback_query', async (callbackQuery) => {
         userType: 'recruiter',
         recruiterType: 'individual'
       });
-      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram name of the Job seeker and {meeting description} is any meeting details. If you want to switch back to Job Seeker role just type /setjobseeker');
+      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide. If you want to switch back to Job Seeker role just type /setjobseeker');
     } catch (error) {
       console.error('Error setting recruiter role:', error);
       bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -290,7 +290,7 @@ bot.onText(/\/company (.+)/, async (msg, match) => {
       recruiterType: 'company',
       companyName: companyName
     });
-    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram name of the Job seeker and {meeting description} is any meeting details. If you want to switch back to Job Seeker role just type /setjobseeker.`);
+    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide. If you want to switch back to Job Seeker role just type /setjobseeker.`);
   } catch (error) {
     console.error('Error setting company recruiter role:', error);
     bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
@@ -1381,6 +1381,7 @@ app.get('/subscription-status', async (req, res) => {
   }
 });
 
+// Handle /subscribe command
 bot.onText(/\/subscribe/, async (msg) => {
   console.log('/subscribe command received');
   const chatId = msg.chat.id;
@@ -1388,24 +1389,25 @@ bot.onText(/\/subscribe/, async (msg) => {
   const user = await userRef.get();
 
   if (user.exists) {
-    if (user.data().userType === 'recruiter') {
-      const opts = {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: 'Subscribe Yearly (99 EUR)', callback_data: 'subscribe_yearly' },
-              { text: 'Subscribe Monthly (15 EUR)', callback_data: 'subscribe_monthly' }
-            ],
-            [
-              { text: 'Unsubscribe', callback_data: 'unsubscribe' }
-            ]
-          ]
-        }
-      };
-      bot.sendMessage(chatId, 'Please choose your subscription plan:', opts);
-    } else {
-      bot.sendMessage(chatId, "Only recruiters need to subscribe.");
+    if (user.data().userType !== 'recruiter') {
+      bot.sendMessage(chatId, 'Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.');
+      return;
     }
+
+    const opts = {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: 'Subscribe Yearly (99 EUR)', callback_data: 'subscribe_yearly' },
+            { text: 'Subscribe Monthly (15 EUR)', callback_data: 'subscribe_monthly' }
+          ],
+          [
+            { text: 'Unsubscribe', callback_data: 'unsubscribe' }
+          ]
+        ]
+      }
+    };
+    bot.sendMessage(chatId, 'Please choose your subscription plan:', opts);
   } else {
     bot.sendMessage(chatId, 'User not found. Please register using /register.');
   }
@@ -1417,8 +1419,8 @@ bot.on('callback_query', async (callbackQuery) => {
   const userRef = db.collection('users').doc(chatId.toString());
   const user = await userRef.get();
   
-  if (!user.exists || user.data().userType !== 'recruiter') {
-    bot.sendMessage(chatId, 'Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.');
+  if (!user.exists) {
+    bot.sendMessage(chatId, 'User not found. Please register using /register.');
     return;
   }
 
