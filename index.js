@@ -146,7 +146,33 @@ bot.onText(/\/start/, (msg) => {
 
   bot.sendMessage(chatId, greeting, { parse_mode: 'Markdown' });
   bot.sendMessage(chatId, description, { parse_mode: 'Markdown' });
-  bot.sendMessage(chatId, "Type /register to get started.");
+
+  const opts = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '➡ Register', callback_data: 'register' }]
+      ]
+    },
+    parse_mode: 'Markdown'
+  };
+
+  bot.sendMessage(chatId, '🪄 Click *Register* to begin!', { parse_mode: 'Markdown' }, opts);
+});
+
+// Handle callback for register button
+bot.on('callback_query', async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data;
+
+  if (data === 'register') {
+    // Trigger the /register command
+    bot.emit('text', { chat: { id: chatId }, text: '/register' });
+  } else if (data === 'setrecruiter') {
+    bot.emit('text', { chat: { id: chatId }, text: '/setrecruiter' });
+  } else if (data === 'continue_jobseeker') {
+    bot.sendMessage(chatId, '🪩 You have chosen to continue as a *job seeker*.\n\nPlease share your *Telegram Username* with the *recruiter* so he could create a job interview meeting with you', { parse_mode: 'Markdown' });
+  }
 });
 
 ////************************************************////
@@ -241,6 +267,17 @@ bot.on('callback_query', async (callbackQuery) => {
 
       bot.sendMessage(chatId, `🕑 Your time zone has been set to ${timeZone}.`);
       bot.sendMessage(chatId, `**Hello, ${userDoc.data().name}!**\n✅ Your registration is complete!\n\nIf you are a recruiter please change your role using /setrecruiter to be able to schedule meetings.`, { parse_mode: 'Markdown' });
+
+      // Buttons to change role to recruiter or continue as job seeker
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '👨‍💼 Change role to recruiter', callback_data: 'setrecruiter' }],
+            [{ text: '🔍 Continue as job seeker', callback_data: 'continue_jobseeker' }]
+          ]
+        }
+      };
+      bot.sendMessage(chatId, 'Would you like to change your role to recruiter 👨‍💻 or continue as a job seeker 🔍 ?', opts);
     } else {
       bot.sendMessage(chatId, '🙌 You have already set your time zone.');
     }
@@ -256,8 +293,8 @@ bot.onText(/\/setrecruiter/, async (msg) => {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: 'Individual', callback_data: 'recruiter_individual' },
-          { text: 'Company', callback_data: 'recruiter_company' }
+          { text: '🥷 Individual', callback_data: 'recruiter_individual' },
+          { text: '📇 Company', callback_data: 'recruiter_company' }
         ]
       ]
     }
