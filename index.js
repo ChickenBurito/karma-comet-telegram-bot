@@ -130,7 +130,7 @@ bot.onText(/\/start/, (msg) => {
 
   *Step 2:* Scheduling a meeting 📅
   - */meeting @username description*: Schedule a meeting with a job seeker using his Telegram username and a meeting title.
-  *Note:* Feedback will be shceduled automatically 2,5 hours after a meeting.
+  *Note:* Feedback will be scheduled automatically 2,5 hours after a meeting.
 
   🔎 Check your user profile, meetings and feedbacks statuses anytime!
   - */userinfo*: Check your user profile.
@@ -142,7 +142,7 @@ bot.onText(/\/start/, (msg) => {
   👑 If you are a recruiter don't forget to subsribe for more amazing features!
   - */subscribe*: Subscribe to recruiter services.
   
-  *KarmaComet* Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!`;
+  🪬 *KarmaComet* Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!`;
 
   bot.sendMessage(chatId, greeting, { parse_mode: 'Markdown' });
   bot.sendMessage(chatId, description, { parse_mode: 'Markdown' });
@@ -165,7 +165,7 @@ bot.onText(/\/register/, async (msg) => {
 
     if (userDoc.exists) {
       console.log(`User ${userName} with chat ID: ${chatId} is already registered.`);
-      bot.sendMessage(chatId, 'You are already registered.');
+      bot.sendMessage(chatId, '🙌 You are already registered.');
     } else {
       console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
       await userRef.set({
@@ -184,7 +184,7 @@ bot.onText(/\/register/, async (msg) => {
       console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
 
      // Ask for the user's time zone
-     bot.sendMessage(chatId, "Please select your time zone:", {
+     bot.sendMessage(chatId, "🌍 Please select your time zone:", {
       reply_markup: {
         inline_keyboard: [
           [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_Pacific/Apia" }],
@@ -218,7 +218,7 @@ bot.onText(/\/register/, async (msg) => {
   }
   } catch (error) {
     console.error('Error registering user:', error);
-    bot.sendMessage(chatId, 'There was an error processing your registration. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your registration. Please try again.');
   }
 });
 
@@ -239,10 +239,10 @@ bot.on('callback_query', async (callbackQuery) => {
         timeZone: timeZone
       });
 
-      bot.sendMessage(chatId, `Your time zone has been set to ${timeZone}.`);
-      bot.sendMessage(chatId, `Hello, ${userDoc.data().name}! Your registration is complete. You are all set! If you are a recruiter please change your role using /setrecruiter to be able to schedule meetings.`);
+      bot.sendMessage(chatId, `🕑 Your time zone has been set to ${timeZone}.`);
+      bot.sendMessage(chatId, `**Hello, ${userDoc.data().name}!**\n✅ Your registration is complete!\n\nIf you are a recruiter please change your role using /setrecruiter to be able to schedule meetings.`, { parse_mode: 'Markdown' });
     } else {
-      bot.sendMessage(chatId, 'You have already set your time zone.');
+      bot.sendMessage(chatId, '🙌 You have already set your time zone.');
     }
   }
 });
@@ -263,7 +263,7 @@ bot.onText(/\/setrecruiter/, async (msg) => {
     }
   };
 
-  bot.sendMessage(chatId, 'Are you an individual recruiter or registering as a company?', opts);
+  bot.sendMessage(chatId, '👨‍💻 Are you an individual recruiter or registering as a company?', opts);
 });
 
 // Handle callback query for recruiter type
@@ -278,13 +278,13 @@ bot.on('callback_query', async (callbackQuery) => {
         userType: 'recruiter',
         recruiterType: 'individual'
       });
-      bot.sendMessage(chatId, 'You are now registered as an individual recruiter. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide. If you want to switch back to Job Seeker role just type /setjobseeker');
+      bot.sendMessage(chatId, 'You are now registered as an **individual recruiter**🥷. 🚀 It is time to schedule your first meeting!\n\nType **/meeting @username {meeting description}** where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide.\n\nIf you want to switch back to **Job Seeker** role just type */setjobseeker*.', { parse_mode: 'Markdown' });
     } catch (error) {
       console.error('Error setting recruiter role:', error);
-      bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error updating your role. Please try again.');
     }
   } else if (data === 'recruiter_company') {
-    bot.sendMessage(chatId, 'Please enter your company name using the format: /company <company_name>');
+    bot.sendMessage(chatId, 'Please enter your *company name* using the format: */company <company_name>*', { parse_mode: 'Markdown' });
   }
 });
 
@@ -299,10 +299,10 @@ bot.onText(/\/company (.+)/, async (msg, match) => {
       recruiterType: 'company',
       companyName: companyName
     });
-    bot.sendMessage(chatId, `You are now registered as a company recruiter for ${companyName}. It is time to schedule your first meeting! Type /meeting @username {meeting description} where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide. If you want to switch back to Job Seeker role just type /setjobseeker.`);
+    bot.sendMessage(chatId, `You are now registered as a company recruiter for **${companyName}**. 🚀 It is time to schedule your **first meeting!**\n\nType **/meeting @username {meeting description}** where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide.\n\nIf you want to switch back to **Job Seeker** role just type */setjobseeker*.`, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('Error setting company recruiter role:', error);
-    bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error updating your role. Please try again.');
   }
 });
 
@@ -317,20 +317,20 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 
     if (user.exists) {
       if (user.data().userType === 'jobSeeker') {
-        bot.sendMessage(chatId, "You are already a job seeker.");
+        bot.sendMessage(chatId, "🙌 You are already a job seeker.");
       } else {
         await userRef.update({
           userType: 'jobSeeker'
         });
 
-        bot.sendMessage(chatId, "Your role has been updated to job seeker. Your recruiter subscription status remains unchanged until expiration date. Please note that in order to use recruiter role features you will need to switch back to recruiter role.");
+        bot.sendMessage(chatId, 'Your role has been updated to **job seeker** ✅\n\nYour recruiter *subscription status remains unchanged* until expiration date.\nPlease note that in order to use recruiter role features you will need to switch back to *recruiter role*.', { parse_mode: 'Markdown' });
       }
     } else {
-      bot.sendMessage(chatId, "User not found. Please register first using /register <your_name>.");
+      bot.sendMessage(chatId, "🤷 User not found. Please register first using /register <your_name>.");
     }
   } catch (error) {
     console.error('Error setting job seeker role:', error);
-    bot.sendMessage(chatId, 'There was an error updating your role. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error updating your role. Please try again.');
   }
 });
 
@@ -345,7 +345,7 @@ bot.onText(/\/reset/, async (msg) => {
 
   // Check if the user is authorized
   if (!resetAuthorizedUsers.includes(userName)) {
-    bot.sendMessage(chatId, 'You are not authorized to use this command.');
+    bot.sendMessage(chatId, '🚧 You are not authorized to use this command.');
     return;
   }
 
@@ -366,10 +366,10 @@ bot.onText(/\/reset/, async (msg) => {
     });
     console.log(`User ${userName} with chat ID ${chatId} reset successfully.`);
 
-    bot.sendMessage(chatId, `Your status has been reset. You are now a job seeker with a free subscription. You can change your role to recruiter if needed using /setrecruiter.`);
+    bot.sendMessage(chatId, `🧹 Your status has been reset. You are now a job seeker with a free subscription. You can change your role to recruiter if needed using /setrecruiter.`);
   } catch (error) {
     console.error('Error resetting user:', error);
-    bot.sendMessage(chatId, 'There was an error processing your reset request. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your reset request. Please try again.');
   }
 });
 
@@ -419,9 +419,9 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   
   if (userDoc.exists && userDoc.data().isAdmin) {
     await broadcastMessage(message);
-    bot.sendMessage(chatId, 'Broadcast message sent.');
+    bot.sendMessage(chatId, '📡 Broadcast message sent.');
   } else {
-    bot.sendMessage(chatId, 'You do not have permission to send broadcast messages.');
+    bot.sendMessage(chatId, '🚧 You do not have permission to send broadcast messages.');
   }
 });
 
@@ -437,9 +437,9 @@ bot.onText(/\/directmessage (\d+) (.+)/, async (msg, match) => {
 
   if (userDoc.exists && userDoc.data().isAdmin) {
     await sendDirectMessage(targetChatId, message);
-    bot.sendMessage(chatId, `Message sent to ${targetChatId}.`);
+    bot.sendMessage(chatId, `📬 Message sent to ${targetChatId}.`);
   } else {
-    bot.sendMessage(chatId, 'You do not have permission to send direct messages.');
+    bot.sendMessage(chatId, '🚧 You do not have permission to send direct messages.');
   }
 });
 
@@ -470,7 +470,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         const expiryDate = new Date(user.subscription.expiry);
 
         if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
-          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+          bot.sendMessage(chatId, '👾 Your subscription has **expired**!\n\nPlease **subscribe** to continue using the service.', { parse_mode: 'Markdown' });
           return;
         }
       }
@@ -509,14 +509,14 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         }
       };
 
-      bot.sendMessage(chatId, 'Please choose the duration for the meeting:', opts);
+      bot.sendMessage(chatId, '⏳ Please choose the duration for the meeting:', opts);
     } else {
       console.log(`User @${counterpartUsername} not found.`);
-      bot.sendMessage(chatId, `User @${counterpartUsername} not found.`);
+      bot.sendMessage(chatId, `🤷 User @${counterpartUsername} not found.`);
     }
   } catch (error) {
     console.error('Error handling /meeting command:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your request. Please try again.');
   }
 });
 
@@ -535,19 +535,19 @@ bot.on('callback_query', async (callbackQuery) => {
 
     let durationInMinutes;
     switch (durationText) {
-      case '30 minutes':
+      case '🕓 30 minutes':
         durationInMinutes = 30;
         break;
-      case '45 minutes':
+      case '🕓 45 minutes':
         durationInMinutes = 45;
         break;
-      case '1 hour':
+      case '🕓 1 hour':
         durationInMinutes = 60;
         break;
-      case '1.5 hours':
+      case '🕓 1.5 hours':
         durationInMinutes = 90;
         break;
-      case '2 hours':
+      case '🕓 2 hours':
         durationInMinutes = 120;
         break;
       default:
@@ -575,10 +575,10 @@ bot.on('callback_query', async (callbackQuery) => {
         }
       };
 
-      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
+      bot.sendMessage(chatId, '📅 Please choose the date for the meeting:', opts);
     } catch (error) {
       console.error('Error updating meeting duration:', error);
-      bot.sendMessage(chatId, 'There was an error updating the meeting duration. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error updating the meeting duration. Please try again.');
     }
   } else if (data[0] === 'choose' && data[1] === 'date' && data[2] === 'meeting') {
     const date = data[4];
@@ -598,7 +598,7 @@ bot.on('callback_query', async (callbackQuery) => {
       }
     };
 
-    bot.sendMessage(chatId, `Please choose up to 3 available time slots for ${date}:`, opts);
+    bot.sendMessage(chatId, `🗓 Please choose up to 3 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
     const meetingRequestId = data[3];
     const date = data[4];
@@ -616,29 +616,29 @@ bot.on('callback_query', async (callbackQuery) => {
           timeSlots.push(`${date} ${time}`);
           await requestRef.update({ timeslots: timeSlots });
 
-          bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
+          bot.sendMessage(chatId, `✅ Added time slot: ${date} ${time}`);
 
           if (timeSlots.length >= 1) {
             // Ask user if they want to create the meeting request
             const opts = {
               reply_markup: {
                 inline_keyboard: [
-                  [{ text: 'Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }],
-                  [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
+                  [{ text: '📤 Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }],
+                  [{ text: '🚫 Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
                 ]
               }
             };
             bot.sendMessage(chatId, 'Do you want to submit the meeting request now?', opts);
           }
         } else {
-          bot.sendMessage(chatId, 'You have already selected 3 time slots.');
+          bot.sendMessage(chatId, '❗You have already selected 3 time slots.');
         }
       } else {
-        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
+        bot.sendMessage(chatId, `🤷 Meeting request not found for ID: ${meetingRequestId}`);
       }
     } catch (error) {
       console.error('Error adding time slot:', error);
-      bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error adding the time slot. Please try again.');
     }
   } else if (data[0] === 'submit' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
@@ -654,31 +654,31 @@ bot.on('callback_query', async (callbackQuery) => {
         await requestRef.update({ request_submitted: true });
 
         // Send meeting request to counterpart
-        await bot.sendMessage(counterpart_id, `You have a meeting request from @${recruiter_name}: ${description}. Meeting duration: ${meeting_duration}. Please choose one of the available time slots:`, {
+        await bot.sendMessage(counterpart_id, `📬 You have a meeting request from **@${recruiter_name}: ${description}**. Meeting duration: ${meeting_duration}. Please choose one of the available time slots:`, {
           reply_markup: {
             inline_keyboard: timeslots.map(slot => [
-              { text: `${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
-            ]).concat([[{ text: 'Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
+              { text: `📌 ${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+            ]).concat([[{ text: '🚫 Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
-        });
+        }, { parse_mode: 'Markdown' });
 
-        bot.sendMessage(recruiter_id, `Meeting request sent to @${counterpart_name}.`);
+        bot.sendMessage(recruiter_id, `📨 Meeting request sent to @${counterpart_name}.`);
       } else {
-        bot.sendMessage(recruiter_id, 'Meeting request not found.');
+        bot.sendMessage(recruiter_id, '🤷 Meeting request not found.');
       }
     } catch (error) {
       console.error('Error submitting meeting request:', error);
-      bot.sendMessage(recruiter_id, 'There was an error submitting the meeting request. Please try again.');
+      bot.sendMessage(recruiter_id, '🛠 There was an error submitting the meeting request. Please try again.');
     }
   } else if (data[0] === 'cancel' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
 
     try {
       await db.collection('meetingRequests').doc(meetingRequestId).delete();
-      bot.sendMessage(chatId, 'Meeting request cancelled.');
+      bot.sendMessage(chatId, '⭕ Meeting request cancelled by the Job Seeker.');
     } catch (error) {
       console.error('Error cancelling meeting request:', error);
-      bot.sendMessage(chatId, 'There was an error cancelling the meeting request. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error cancelling the meeting request. Please try again.');
     }
   } else if (data[0] === 'accept' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
@@ -724,8 +724,8 @@ bot.on('callback_query', async (callbackQuery) => {
           });
 
           // Notify both parties
-          bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
-          bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+          bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+          bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
 
           // Schedule feedback request generation after 2.5 hours
           setTimeout(async () => {
@@ -750,19 +750,19 @@ bot.on('callback_query', async (callbackQuery) => {
                 feedback_submitted: false
               });
 
-              bot.sendMessage(recruiter_id, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>`);
+              bot.sendMessage(recruiter_id, `📆 Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>`);
             }
           }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
 
         } else {
-          bot.sendMessage(chatId, 'Invalid time slot selected.');
+          bot.sendMessage(chatId, '🤷 Invalid time slot selected.');
         }
       } else {
-        bot.sendMessage(chatId, 'Meeting request not found.');
+        bot.sendMessage(chatId, '🤷 Meeting request not found.');
       }
     } catch (error) {
       console.error('Error accepting meeting request:', error);
-      bot.sendMessage(chatId, 'There was an error accepting the meeting request. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error accepting the meeting request. Please try again.');
     }
   } else if (data[0] === 'decline' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
@@ -778,15 +778,15 @@ bot.on('callback_query', async (callbackQuery) => {
         await requestRef.update({ counterpart_accepted: false });
 
         // Notify initiator
-        bot.sendMessage(recruiter_id, `Your meeting request has been declined by @${request.data().counterpart_name}.`);
+        bot.sendMessage(recruiter_id, `⭕ Your meeting request has been declined by @${request.data().counterpart_name}.`);
 
-        bot.sendMessage(chatId, 'You have declined the meeting request.');
+        bot.sendMessage(chatId, '⭕ You have declined the meeting request.');
       } else {
-        bot.sendMessage(chatId, 'Meeting request not found.');
+        bot.sendMessage(chatId, '🤷 Meeting request not found.');
       }
     } catch (error) {
       console.error('Error declining meeting request:', error);
-      bot.sendMessage(chatId, 'There was an error declining the meeting request. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error declining the meeting request. Please try again.');
     }
   } else if (data[0] === 'approve' && data[1] === 'feedback') {
     const feedbackRequestId = data[2];
@@ -817,14 +817,14 @@ bot.on('callback_query', async (callbackQuery) => {
           counterpart_commitment_state: 'pending_feedback'
         });
 
-        bot.sendMessage(counterpart_id, `The recruiter will provide feedback by ${new Date(feedbackDueDate).toLocaleString()}.`);
-        bot.sendMessage(chatId, 'Feedback request approved.');
+        bot.sendMessage(counterpart_id, `📝 The recruiter will provide feedback by ${new Date(feedbackDueDate).toLocaleString()}.`);
+        bot.sendMessage(chatId, '✅ Feedback request approved.');
       } else {
-        bot.sendMessage(chatId, 'Feedback request not found.');
+        bot.sendMessage(chatId, '🤷 Feedback request not found.');
       }
     } catch (error) {
       console.error('Error approving feedback request:', error);
-      bot.sendMessage(chatId, 'There was an error approving the feedback request. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error approving the feedback request. Please try again.');
     }
   } else if (data[0] === 'decline' && data[1] === 'feedback') {
     const feedbackRequestId = data[2];
@@ -836,14 +836,14 @@ bot.on('callback_query', async (callbackQuery) => {
       if (feedbackRequest.exists) {
         await feedbackRequestRef.delete();
 
-        bot.sendMessage(feedbackRequest.data().recruiter_id, 'Your feedback request was declined by the job seeker.');
-        bot.sendMessage(chatId, 'You have declined the feedback request.');
+        bot.sendMessage(feedbackRequest.data().recruiter_id, '⭕ Your feedback request was declined by the job seeker.');
+        bot.sendMessage(chatId, '⭕ You have declined the feedback request.');
       } else {
-        bot.sendMessage(chatId, 'Feedback request not found.');
+        bot.sendMessage(chatId, '🤷 Feedback request not found.');
       }
     } catch (error) {
       console.error('Error declining feedback request:', error);
-      bot.sendMessage(chatId, 'There was an error declining the feedback request. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error declining the feedback request. Please try again.');
     }
   }
 });
@@ -866,23 +866,23 @@ bot.onText(/\/userinfo/, async (msg) => {
       const userTimeZone = userData.timeZone || 'UTC';
       const registeredAt = moment.tz(userData.registered_at, userTimeZone).format('YYYY-MM-DD HH:mm');
 
-      let responseMessage = `Username: ${userData.name}\n`;
-      responseMessage += `Member since: ${registeredAt}\n`;
-      responseMessage += `User Type: ${userData.userType}\n`;
-      responseMessage += `Recruiter Type: ${userData.recruiterType || 'N/A'}\n`;
-      responseMessage += `Subscription Status: ${userData.subscription.status}\n`;
-      responseMessage += `Subscription Expiry Date: ${userData.subscription.expiry ? moment.tz(userData.subscription.expiry, userTimeZone).format('YYYY-MM-DD HH:mm') : 'N/A'}\n`;
-      responseMessage += `Score: ${userData.score}\n`;
-      responseMessage += `Company Name: ${userData.companyName || 'N/A'}\n`;
-      responseMessage += `Time Zone: ${userData.timeZone || 'UTC'}\n`;
+      let responseMessage = `*Username:* ${userData.name}\n`;
+      responseMessage += `*Member since:* ${registeredAt}\n`;
+      responseMessage += `*User Type:* ${userData.userType}\n`;
+      responseMessage += `*Recruiter Type:* ${userData.recruiterType || 'N/A'}\n`;
+      responseMessage += `*Subscription Status:* ${userData.subscription.status}\n`;
+      responseMessage += `*Subscription Expiry Date:* ${userData.subscription.expiry ? moment.tz(userData.subscription.expiry, userTimeZone).format('YYYY-MM-DD HH:mm') : 'N/A'}\n`;
+      responseMessage += `*Score:* ${userData.score}\n`;
+      responseMessage += `*Company Name:* ${userData.companyName || 'N/A'}\n`;
+      responseMessage += `*Time Zone:* ${userData.timeZone || 'UTC'}\n`;
 
-      bot.sendMessage(chatId, responseMessage);
+      bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
-      bot.sendMessage(chatId, 'User not found. Please register using /register.');
+      bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
     }
   } catch (error) {
     console.error('Error handling /userinfo command:', error);
-    bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
+    bot.sendMessage(chatId, '🛠 There was an error processing your request. Please try again.');
   }
 });
 
@@ -923,7 +923,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     if (upcomingMeetings.length > 0) {
       let responseMessage = '📂 *Your Scheduled Meetings:*\n'; //Single line break \n
       upcomingMeetings.forEach((meeting, index) => {
-        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `🗳 *Meeting #${index + 1}*\n`;
         responseMessage += `   💼 *Job Seeker Name:* ${meeting.counterpart_name}\n`;
         responseMessage += `   👨‍💻 *Recruiter Name:* ${meeting.recruiter_name}\n`;
         responseMessage += `   📅 *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
@@ -976,7 +976,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     if (pastMeetings.length > 0) {
       let responseMessage = '🗄 *Your Meeting History:*\n';
       pastMeetings.forEach((meeting, index) => {
-        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `🗳 *Meeting #${index + 1}*\n`;
         responseMessage += `   💼 *Job Seeker Name:* ${meeting.counterpart_name}\n`;
         responseMessage += `   👨‍💻 *Recruiter Name:* ${meeting.recruiter_name}\n`;
         responseMessage += `   📅 *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
@@ -1029,7 +1029,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
     if (upcomingFeedbacks.length > 0) {
       let responseMessage = '🗓 *Your Scheduled Feedbacks:*\n';
       upcomingFeedbacks.forEach((feedback, index) => {
-        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `🗳 *Feedback #${index + 1}*\n`;
         responseMessage += `   💼 *Job Seeker Name:* ${feedback.counterpart_name}\n`;
         responseMessage += `   👨‍💻 *Recruiter Name:* ${feedback.recruiter_name}\n`;
         responseMessage += `   📅 *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
@@ -1082,7 +1082,7 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
     if (pastFeedbacks.length > 0) {
       let responseMessage = '🗃 *Your Feedback History:*\n';
       pastFeedbacks.forEach((feedback, index) => {
-        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `🗳 *Feedback #${index + 1}*\n`;
         responseMessage += `   💼 *Job Seeker Name:* ${feedback.counterpart_name}\n`;
         responseMessage += `   👨‍💻 *Recruiter Name:* ${feedback.recruiter_name}\n`;
         responseMessage += `   📅 *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
@@ -1143,7 +1143,7 @@ bot.on('callback_query', async (callbackQuery) => {
               }
             });
 
-            bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}. Your free trial period has started and will expire on ${moment.tz(expiryDate, userTimeZone).format('YYYY-MM-DD HH:mm')}.`);
+            bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new score is *${newScore}*.\n\nYour *free trial period* has started and will expire on *${moment.tz(expiryDate, userTimeZone).format('YYYY-MM-DD HH:mm*')}.`, { parse_mode: 'Markdown' });
 
             // Automatically create feedback request after 2.5 hours
             setTimeout(async () => {
@@ -1154,11 +1154,11 @@ bot.on('callback_query', async (callbackQuery) => {
           }
         }
       } else {
-        bot.sendMessage(chatId, 'Commitment not found.');
+        bot.sendMessage(chatId, '🤷 Commitment not found.');
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      bot.sendMessage(chatId, 'There was an error updating the status. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error updating the status. Please try again.');
     }
   } else if (action === 'review') {
     const chatId = msg.chat.id;
@@ -1201,22 +1201,22 @@ bot.on('callback_query', async (callbackQuery) => {
             reply_markup: {
               inline_keyboard: [
                 [
-                  { text: 'Attended', callback_data: `review_${commitmentId}_attended` },
-                  { text: 'Missed', callback_data: `review_${commitmentId}_missed` }
+                  { text: '✅ Attended', callback_data: `review_${commitmentId}_attended` },
+                  { text: '🚫 Missed', callback_data: `review_${commitmentId}_missed` }
                 ]
               ]
             }
           };
 
-          bot.sendMessage(counterpartId, `Update your commitment status for "${commitment.data().description}":`, opts);
-          bot.sendMessage(chatId, `Your commitment status for "${commitment.data().description}" has been updated to ${status}.`);
+          bot.sendMessage(counterpartId, `🔔 Update your commitment status for "${commitment.data().description}":`, opts);
+          bot.sendMessage(chatId, `🎉 Your commitment status for "${commitment.data().description}" has been updated to ${status}.`);
         }
       } else {
-        bot.sendMessage(chatId, 'Commitment not found.');
+        bot.sendMessage(chatId, '🤷 Commitment not found.');
       }
     } catch (error) {
       console.error('Error updating review status:', error);
-      bot.sendMessage(chatId, 'There was an error updating the review status. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error updating the review status. Please try again.');
     }
   }
 });
@@ -1343,7 +1343,7 @@ bot.onText(/\/subscribe/, async (msg) => {
 
   if (user.exists) {
     if (user.data().userType !== 'recruiter') {
-      bot.sendMessage(chatId, 'Only recruiters need to subscribe. Please update your role using /setrecruiter if you are a recruiter.');
+      bot.sendMessage(chatId, 'Only recruiters need to subscribe.\n\nPlease update your role using /setrecruiter if you are a recruiter.');
       return;
     }
 
@@ -1351,18 +1351,18 @@ bot.onText(/\/subscribe/, async (msg) => {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: 'Subscribe Yearly (99 EUR)', callback_data: 'subscribe_yearly' },
-            { text: 'Subscribe Monthly (15 EUR)', callback_data: 'subscribe_monthly' }
+            { text: '👑 Subscribe Yearly (99 EUR)', callback_data: 'subscribe_yearly' },
+            { text: '💎 Subscribe Monthly (15 EUR)', callback_data: 'subscribe_monthly' }
           ],
           [
-            { text: 'Unsubscribe', callback_data: 'unsubscribe' }
+            { text: '🚫 Unsubscribe', callback_data: 'unsubscribe' }
           ]
         ]
       }
     };
-    bot.sendMessage(chatId, 'Please choose your subscription plan:', opts);
+    bot.sendMessage(chatId, '🧾 Please choose your subscription plan:', opts);
   } else {
-    bot.sendMessage(chatId, 'User not found. Please register using /register.');
+    bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
   }
 });
 
@@ -1373,7 +1373,7 @@ bot.on('callback_query', async (callbackQuery) => {
   const user = await userRef.get();
   
   if (!user.exists) {
-    bot.sendMessage(chatId, 'User not found. Please register using /register.');
+    bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
     return;
   }
 
@@ -1386,7 +1386,7 @@ bot.on('callback_query', async (callbackQuery) => {
     const stripeCustomerId = user.data().stripeCustomerId;
 
     if (!stripeCustomerId) {
-      bot.sendMessage(chatId, 'You do not have an active subscription to unsubscribe from.');
+      bot.sendMessage(chatId, '🤷 You do not have an active subscription to unsubscribe from.');
       return;
     }
 
@@ -1396,10 +1396,10 @@ bot.on('callback_query', async (callbackQuery) => {
         'subscription.status': 'canceled',
         'subscription.expiry': null
       });
-      bot.sendMessage(chatId, 'Your subscription has been canceled.');
+      bot.sendMessage(chatId, '😿 Your subscription has been canceled.');
     } catch (error) {
       console.error('Error during unsubscription:', error);
-      bot.sendMessage(chatId, 'There was an error processing your unsubscription. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error processing your unsubscription. Please try again.');
     }
     return;
   }
@@ -1407,10 +1407,10 @@ bot.on('callback_query', async (callbackQuery) => {
   if (priceId) {
     try {
       const sessionUrl = await createCheckoutSession(priceId, chatId);
-      bot.sendMessage(chatId, `Please complete your subscription payment using this link: ${sessionUrl}`);
+      bot.sendMessage(chatId, `💳 Please complete your subscription payment using this link: ${sessionUrl}`);
     } catch (error) {
       console.error('Error creating Stripe session:', error);
-      bot.sendMessage(chatId, 'There was an error processing your subscription. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error processing your subscription. Please try again.');
     }
   }
 });
@@ -1448,17 +1448,17 @@ const checkSubscription = async (req, res, next) => {
 
       // Check subscription status only for recruiters
       if (user.userType === 'recruiter') {
-        const now = new Date();
-        const expiryDate = new Date(user.subscription.expiry);
+        const now = moment().tz(user.timeZone || 'UTC');
+        const expiryDate = moment(user.subscription.expiry).tz(user.timeZone || 'UTC');
 
-        if (user.subscription.status === 'trial' && now >= expiryDate) {
+        if (user.subscription.status === 'trial' && now.isSameOrAfter(expiryDate)) {
           await userRef.update({
             'subscription.status': 'expired'
           });
-          bot.sendMessage(chatId, 'Your trial period has expired. Please subscribe to continue using the service.');
+          bot.sendMessage(chatId, '❗ Your trial period has expired.\n\n💳 Please subscribe to continue using the service.');
           return;
         } else if (user.subscription.status === 'expired') {
-          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+          bot.sendMessage(chatId, '❗ Your subscription has expired.\n\n💳 Please subscribe to continue using the service.');
           return;
         }
       }
@@ -1485,7 +1485,7 @@ schedule.scheduleJob('0 0 * * *', async () => {
       await usersRef.doc(userDoc.id).update({
         'subscription.status': 'expired'
       });
-      bot.sendMessage(userDoc.id, 'Your trial period has expired. Please subscribe to continue using the service.');
+      bot.sendMessage(userDoc.id, '❗ Your trial period has expired.\n\n💳 Please subscribe to continue using the service.');
     }
   });
 });
@@ -1521,18 +1521,18 @@ const sendMeetingReminders = async () => {
 
     // Reminder 24 hours before
     if (meetingDate.diff(recruiterNow, 'hours') === 24) {
-      bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meetingDate.format()}.`);
+      bot.sendMessage(meeting.recruiter_id, `🚨 **Reminder:** You have a *meeting* "${meeting.description}" with *${meeting.counterpart_name}* scheduled on *${meetingDate.format()}*.`, { parse_mode: 'Markdown' });
     }
     if (meetingDate.diff(counterpartNow, 'hours') === 24) {
-      bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meetingDate.format()}.`);
+      bot.sendMessage(meeting.counterpart_id, `🚨 **Reminder:** You have a *meeting* "${meeting.description}" with *${meeting.recruiter_name}* scheduled on *${meetingDate.format()}*.`, { parse_mode: 'Markdown' });
     }
 
     // Reminder 1 hour before
     if (meetingDate.diff(recruiterNow, 'hours') === 1) {
-      bot.sendMessage(meeting.recruiter_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.counterpart_name} is happening in 1 hour.`);
+      bot.sendMessage(meeting.recruiter_id, `🚨 **Reminder:** Your *meeting* "${meeting.description}" with *${meeting.counterpart_name}* is happening in *1 hour*.`, { parse_mode: 'Markdown' });
     }
     if (meetingDate.diff(counterpartNow, 'hours') === 1) {
-      bot.sendMessage(meeting.counterpart_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.recruiter_name} is happening in 1 hour.`);
+      bot.sendMessage(meeting.counterpart_id, `🚨 **Reminder:** Your *meeting* "${meeting.description}" with *${meeting.recruiter_name}* is happening in *1 hour*.`, { parse_mode: 'Markdown' });
     }
   });
 };
@@ -1564,18 +1564,18 @@ const sendFeedbackReminders = async () => {
 
     // Reminder 24 hours before
     if (feedbackDate.diff(recruiterNow, 'hours') === 24) {
-      bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedbackDate.format()}.`);
+      bot.sendMessage(feedback.recruiter_id, `🚨 **Reminder:** You need to provide *feedback* for your meeting with *${feedback.counterpart_name}* by *${feedbackDate.format()}*.`, { parse_mode: 'Markdown' });
     }
     if (feedbackDate.diff(counterpartNow, 'hours') === 24) {
-      bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedbackDate.format()}.`);
+      bot.sendMessage(feedback.counterpart_id, `🚨 **Reminder:** *${feedback.recruiter_name}* needs to provide *feedback* for your meeting by *${feedbackDate.format()}*.`, { parse_mode: 'Markdown' });
     }
 
     // Reminder 1 hour before
     if (feedbackDate.diff(recruiterNow, 'hours') === 1) {
-      bot.sendMessage(feedback.recruiter_id, `Reminder: Your feedback for the meeting with ${feedback.counterpart_name} is due in 1 hour.`);
+      bot.sendMessage(feedback.recruiter_id, `🚨 **Reminder:** Your *feedback* for the meeting with *${feedback.counterpart_name}* is due in *1 hour*.`, { parse_mode: 'Markdown' });
     }
     if (feedbackDate.diff(counterpartNow, 'hours') === 1) {
-      bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name}'s feedback for your meeting is due in 1 hour.`);
+      bot.sendMessage(feedback.counterpart_id, `🚨 **Reminder:** *${feedback.recruiter_name}'s* feedback for your meeting is due in *1 hour*.`, { parse_mode: 'Markdown' });
     }
   });
 };
