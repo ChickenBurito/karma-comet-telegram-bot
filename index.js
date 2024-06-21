@@ -111,15 +111,16 @@ bot.onText(/\/start/, (msg) => {
   const description = `
  I am KarmaComet Bot!
 
- 🌏 The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. I ensure that all parties stay true to their commitments, helping everyone save time and money.
+ 🌏 The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. 
+ 🤝 I ensure that all parties stay true to their commitments, helping everyone save time and money.
   
   🌟 Key Features:
-  🟢 Accountability: Ensures both job seekers and recruiters keep their promises.
+  🟢 Accountability: Ensure both job seekers and recruiters keep their promises.
   🟢 Commitment Tracking: Log and track all your meetings and feedbacks with precise dates, times, and descriptions.
   🟢 Automated Reminders: Never forget a meeting or interview with our timely reminders.
-  🟢 Feedback Enforcement: Pushes recruiters and Job seekers to share timely feedback, improving transparency and trust.
+  🟢 Feedback Enforcement: Push Recruiters and Job seekers to share timely feedback, improving transparency and trust.
   🟢 Score System: Track your reliability with a scoring system based on your commitment fulfillment.
-  🟢 Subscription Services: Recruiters can subscribe for advanced features and management tools.
+  🟢 Subscription Services: Recruiters can subscribe for advanced features and management tools such as popular ATS integrations and more.
   
   📋 User Guide:
   - **/register**: Register yourself as a job seeker using your Telegram username.
@@ -485,8 +486,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         description: description,
         request_submitted: false,
         counterpart_accepted: false,
-        meeting_duration: null, // Initialize meeting duration
-        dates: []
+        meeting_duration: null // Initialize meeting duration
       });
       console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
 
@@ -563,7 +563,7 @@ bot.on('callback_query', async (callbackQuery) => {
         reply_markup: {
           inline_keyboard: dates.map(date => [
             { text: date, callback_data: `choose_date_meeting_${meetingRequestId}_${date}` }
-          ])
+          ]).concat([[{ text: 'Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }], [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]])
         }
       };
 
@@ -577,48 +577,20 @@ bot.on('callback_query', async (callbackQuery) => {
     const meetingRequestId = data[3];
     console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-    const request = await requestRef.get();
-
-    if (request.exists) {
-      const dates = request.data().dates || [];
-
-      if (dates.length < 3) {
-        dates.push(date);
-        await requestRef.update({ dates: dates });
-
-        const availableTimes = [];
-        for (let hour = 9; hour <= 19; hour++) {
-          availableTimes.push(`${hour}:00`, `${hour}:30`);
-        }
-
-        const opts = {
-          reply_markup: {
-            inline_keyboard: availableTimes.map(time => [
-              { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
-            ])
-          }
-        };
-
-        bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
-
-        if (dates.length < 3) {
-          bot.sendMessage(chatId, 'You can choose up to 3 dates. Would you like to add another date?', {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'Add another date', callback_data: `add_date_meeting_${meetingRequestId}` }],
-                [{ text: 'Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }],
-                [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
-              ]
-            }
-          });
-        }
-      } else {
-        bot.sendMessage(chatId, 'You have already selected the maximum of 3 dates.');
-      }
-    } else {
-      bot.sendMessage(chatId, 'Meeting request not found.');
+    const availableTimes = [];
+    for (let hour = 9; hour <= 19; hour++) {
+      availableTimes.push(`${hour}:00`, `${hour}:30`);
     }
+
+    const opts = {
+      reply_markup: {
+        inline_keyboard: availableTimes.map(time => [
+          { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
+        ])
+      }
+    };
+
+    bot.sendMessage(chatId, `Please choose up to 3 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
     const meetingRequestId = data[3];
     const date = data[4];
@@ -630,21 +602,16 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const timeSlots = request.data().timeslots || [];
+        const timeSlots = request.data().timeslots;
 
-        const dateSlots = timeSlots.filter(slot => slot.startsWith(date));
-
-        if (dateSlots.length < 5) {
+        if (timeSlots.length < 3) {
           timeSlots.push(`${date} ${time}`);
           await requestRef.update({ timeslots: timeSlots });
 
           bot.sendMessage(chatId, `Added time slot: ${date} ${time}`);
 
-          if (dateSlots.length + 1 >= 5) {
-            bot.sendMessage(chatId, 'You have already selected the maximum of 5 time slots for this date.');
-          }
-
-          if (timeSlots.length >= 1 && timeSlots.length <= 15) {
+          if (timeSlots.length >= 1) {
+            // Ask user if they want to create the meeting request
             const opts = {
               reply_markup: {
                 inline_keyboard: [
@@ -656,36 +623,15 @@ bot.on('callback_query', async (callbackQuery) => {
             bot.sendMessage(chatId, 'Do you want to submit the meeting request now?', opts);
           }
         } else {
-          bot.sendMessage(chatId, 'You have already selected 5 time slots for this date.');
+          bot.sendMessage(chatId, 'You have already selected 3 time slots.');
         }
       } else {
-        bot.sendMessage(chatId, 'Meeting request not found.');
+        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
       }
     } catch (error) {
       console.error('Error adding time slot:', error);
       bot.sendMessage(chatId, 'There was an error adding the time slot. Please try again.');
     }
-  } else if (data[0] === 'add' && data[1] === 'date' && data[2] === 'meeting') {
-    const meetingRequestId = data[3];
-
-    // Ask user to choose date
-    const dates = [];
-    const now = new Date();
-    for (let i = 0; i < 14; i++) {
-      const date = new Date(now);
-      date.setDate(now.getDate() + i);
-      dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
-    }
-
-    const opts = {
-      reply_markup: {
-        inline_keyboard: dates.map(date => [
-          { text: date, callback_data: `choose_date_meeting_${meetingRequestId}_${date}` }
-        ])
-      }
-    };
-
-    bot.sendMessage(chatId, 'Please choose another date for the meeting:', opts);
   } else if (data[0] === 'submit' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
 
@@ -746,8 +692,8 @@ bot.on('callback_query', async (callbackQuery) => {
           });
 
           // Calculate end time
-          const meetingStartTime = new Date(selectedTimeSlot);
-          const meetingEndTime = new Date(meetingStartTime.getTime() + duration_in_minutes * 60000);
+          const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', request.data().timeZone);
+          const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
 
           // Create a meeting commitment
           const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
@@ -761,8 +707,8 @@ bot.on('callback_query', async (callbackQuery) => {
             meeting_commitment_id: meetingCommitmentId,
             created_at: request.data().created_at,
             accepted_at: new Date().toISOString(),
-            meeting_scheduled_at: selectedTimeSlot,
-            meeting_end_time: meetingEndTime.toISOString(),
+            meeting_scheduled_at: meetingStartTime.toISOString(),
+            meeting_end_time: meetingEndTime,
             description: request.data().description,
             recruiter_commitment_state: 'pending_meeting',
             counterpart_commitment_state: 'pending_meeting',
@@ -780,8 +726,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
             if (commitment.exists) {
               const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
-              const feedbackDueDate = new Date();
-              feedbackDueDate.setHours(feedbackDueDate.getHours() + 2.5);
+              const feedbackDueDate = moment().add(2.5, 'hours').toISOString();
 
               await db.collection('feedbackRequests').doc(feedbackRequestId).set({
                 feedback_request_id: feedbackRequestId,
@@ -790,7 +735,7 @@ bot.on('callback_query', async (callbackQuery) => {
                 counterpart_id: counterpart_id,
                 counterpart_name: request.data().counterpart_name,
                 feedback_request_created_at: new Date().toISOString(),
-                feedback_due_date: feedbackDueDate.toISOString(),
+                feedback_due_date: feedbackDueDate,
                 meeting_request_id: meetingRequestId,
                 meeting_commitment_id: meetingCommitmentId,
                 feedback_planned_at: null,
