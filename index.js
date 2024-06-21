@@ -484,8 +484,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         description: description,
         request_submitted: false,
         counterpart_accepted: false,
-        meeting_duration: null, // Initialize meeting duration
-        selected_dates: [] // Initialize selected dates
+        meeting_duration: null // Initialize meeting duration
       });
       console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
 
@@ -521,14 +520,35 @@ bot.on('callback_query', async (callbackQuery) => {
 
   if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
     const meetingRequestId = data[3];
-    const duration = data.slice(4).join(' '); // Join the rest of the array to get the full duration text
-    console.log(`Duration chosen: ${duration}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+    const durationText = data.slice(4).join(' '); // Join the rest of the array to get the full duration text
+    console.log(`Duration chosen: ${durationText}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+
+    let durationInMinutes;
+    switch (durationText) {
+      case '30 minutes':
+        durationInMinutes = 30;
+        break;
+      case '45 minutes':
+        durationInMinutes = 45;
+        break;
+      case '1 hour':
+        durationInMinutes = 60;
+        break;
+      case '1.5 hours':
+        durationInMinutes = 90;
+        break;
+      case '2 hours':
+        durationInMinutes = 120;
+        break;
+      default:
+        durationInMinutes = 60; // Default to 1 hour if unknown duration
+    }
 
     try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      await requestRef.update({ meeting_duration: duration });
+      await requestRef.update({ meeting_duration: durationText, duration_in_minutes: durationInMinutes });
 
-      // Ask user to choose up to 3 dates
+      // Ask user to choose date
       const dates = [];
       const now = new Date();
       for (let i = 0; i < 14; i++) {
@@ -545,7 +565,7 @@ bot.on('callback_query', async (callbackQuery) => {
         }
       };
 
-      bot.sendMessage(chatId, 'Please choose up to 3 dates for the meeting:', opts);
+      bot.sendMessage(chatId, 'Please choose the date for the meeting:', opts);
     } catch (error) {
       console.error('Error updating meeting duration:', error);
       bot.sendMessage(chatId, 'There was an error updating the meeting duration. Please try again.');
@@ -555,76 +575,20 @@ bot.on('callback_query', async (callbackQuery) => {
     const meetingRequestId = data[3];
     console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      const request = await requestRef.get();
-
-      if (request.exists) {
-        const selectedDates = request.data().selected_dates || [];
-
-        if (selectedDates.length < 3) {
-          selectedDates.push(date);
-          await requestRef.update({ selected_dates: selectedDates });
-
-          bot.sendMessage(chatId, `Added date: ${date}`);
-
-          if (selectedDates.length < 3) {
-            bot.sendMessage(chatId, 'You can choose more dates or proceed to select time slots for the chosen dates.');
-          }
-
-          if (selectedDates.length === 3) {
-            const opts = {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: 'Proceed to select time slots', callback_data: `proceed_timeslot_meeting_${meetingRequestId}` }],
-                  [{ text: 'Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
-                ]
-              }
-            };
-            bot.sendMessage(chatId, 'You have selected 3 dates. Do you want to proceed to select time slots?', opts);
-          }
-        } else {
-          bot.sendMessage(chatId, 'You have already selected 3 dates.');
-        }
-      } else {
-        bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
-      }
-    } catch (error) {
-      console.error('Error adding date:', error);
-      bot.sendMessage(chatId, 'There was an error adding the date. Please try again.');
+    const availableTimes = [];
+    for (let hour = 9; hour <= 19; hour++) {
+      availableTimes.push(`${hour}:00`, `${hour}:30`);
     }
-  } else if (data[0] === 'proceed' && data[1] === 'timeslot' && data[2] === 'meeting') {
-    const meetingRequestId = data[3];
 
-    try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      const request = await requestRef.get();
-
-      if (request.exists) {
-        const selectedDates = request.data().selected_dates;
-        const availableTimes = [];
-        for (let hour = 9; hour <= 19; hour++) {
-          availableTimes.push(`${hour}:00`, `${hour}:30`);
-        }
-
-        selectedDates.forEach(date => {
-          const opts = {
-            reply_markup: {
-              inline_keyboard: availableTimes.map(time => [
-                { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
-              ])
-            }
-          };
-
-          bot.sendMessage(chatId, `Please choose up to 5 available time slots for ${date}:`, opts);
-        });
-      } else {
-        bot.sendMessage(chatId, 'Meeting request not found.');
+    const opts = {
+      reply_markup: {
+        inline_keyboard: availableTimes.map(time => [
+          { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
+        ])
       }
-    } catch (error) {
-      console.error('Error proceeding to time slot selection:', error);
-      bot.sendMessage(chatId, 'There was an error processing your request. Please try again.');
-    }
+    };
+
+    bot.sendMessage(chatId, `Please choose up to 3 available time slots for ${date}:`, opts);
   } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
     const meetingRequestId = data[3];
     const date = data[4];
@@ -638,7 +602,7 @@ bot.on('callback_query', async (callbackQuery) => {
       if (request.exists) {
         const timeSlots = request.data().timeslots;
 
-        if (timeSlots.length < 5) {
+        if (timeSlots.length < 3) {
           timeSlots.push(`${date} ${time}`);
           await requestRef.update({ timeslots: timeSlots });
 
@@ -657,7 +621,7 @@ bot.on('callback_query', async (callbackQuery) => {
             bot.sendMessage(chatId, 'Do you want to submit the meeting request now?', opts);
           }
         } else {
-          bot.sendMessage(chatId, 'You have already selected 5 time slots.');
+          bot.sendMessage(chatId, 'You have already selected 3 time slots.');
         }
       } else {
         bot.sendMessage(chatId, `Meeting request not found for ID: ${meetingRequestId}`);
@@ -674,7 +638,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name, meeting_duration } = request.data();
+        const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name, meeting_duration, duration_in_minutes } = request.data();
 
         // Update request_submitted to true
         await requestRef.update({ request_submitted: true });
@@ -715,7 +679,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { recruiter_id, counterpart_id, meeting_duration } = request.data();
+        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes } = request.data();
 
         // Ensure selectedTimeSlot is correctly defined
         if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
@@ -724,6 +688,10 @@ bot.on('callback_query', async (callbackQuery) => {
             counterpart_accepted: true,
             selected_time_slot: selectedTimeSlot
           });
+
+          // Calculate end time
+          const meetingStartTime = new Date(selectedTimeSlot);
+          const meetingEndTime = new Date(meetingStartTime.getTime() + duration_in_minutes * 60000);
 
           // Create a meeting commitment
           const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
@@ -738,52 +706,54 @@ bot.on('callback_query', async (callbackQuery) => {
             created_at: request.data().created_at,
             accepted_at: new Date().toISOString(),
             meeting_scheduled_at: selectedTimeSlot,
+            meeting_end_time: meetingEndTime.toISOString(),
             description: request.data().description,
             recruiter_commitment_state: 'pending_meeting',
             counterpart_commitment_state: 'pending_meeting',
             meeting_duration: meeting_duration // Include meeting duration
           });
-                // Notify both parties
-                bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
-                bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
 
-                // Schedule feedback request generation after 2.5 hours
-                setTimeout(async () => {
-                    const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
-                    const commitment = await commitmentRef.get();
+          // Notify both parties
+          bot.sendMessage(recruiter_id, `Your meeting request has been accepted by @${request.data().counterpart_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
+          bot.sendMessage(counterpart_id, `You have accepted the meeting request from @${request.data().recruiter_name}. Meeting is scheduled at ${selectedTimeSlot}.`);
 
-                    if (commitment.exists) {
-                        const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000)+1)}`;
-                        const feedbackDueDate = new Date();
-                        feedbackDueDate.setHours(feedbackDueDate.getHours() + 2.5);
+          // Schedule feedback request generation after 2.5 hours
+          setTimeout(async () => {
+            const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
+            const commitment = await commitmentRef.get();
 
-                        await db.collection('feedbackRequests').doc(feedbackRequestId).set({
-                            feedback_request_id: feedbackRequestId,
-                            recruiter_id: recruiter_id,
-                            recruiter_name: request.data().recruiter_name,
-                            counterpart_id: counterpart_id,
-                            counterpart_name: request.data().counterpart_name,
-                            feedback_request_created_at: new Date().toISOString(),
-                            feedback_due_date: feedbackDueDate.toISOString(),
-                            meeting_request_id: meetingRequestId,
-                            meeting_commitment_id: meetingCommitmentId,
-                            feedback_planned_at: null,
-                            feedback_submitted: false
-                        });
+            if (commitment.exists) {
+              const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
+              const feedbackDueDate = new Date();
+              feedbackDueDate.setHours(feedbackDueDate.getHours() + 2.5);
 
-                        bot.sendMessage(recruiter_id, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>`);
-                    }
-                }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
+              await db.collection('feedbackRequests').doc(feedbackRequestId).set({
+                feedback_request_id: feedbackRequestId,
+                recruiter_id: recruiter_id,
+                recruiter_name: request.data().recruiter_name,
+                counterpart_id: counterpart_id,
+                counterpart_name: request.data().counterpart_name,
+                feedback_request_created_at: new Date().toISOString(),
+                feedback_due_date: feedbackDueDate.toISOString(),
+                meeting_request_id: meetingRequestId,
+                meeting_commitment_id: meetingCommitmentId,
+                feedback_planned_at: null,
+                feedback_submitted: false
+              });
 
-            } else {
-                bot.sendMessage(chatId, 'Invalid time slot selected.');
+              bot.sendMessage(recruiter_id, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>`);
             }
+          }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
+
         } else {
-            bot.sendMessage(chatId, 'Meeting request not found.');
+          bot.sendMessage(chatId, 'Invalid time slot selected.');
         }
+      } else {
+        bot.sendMessage(chatId, 'Meeting request not found.');
+      }
     } catch (error) {
-        console.error('Error accepting meeting request:', error);
-        bot.sendMessage(chatId, 'There was an error accepting the meeting request. Please try again.');
+      console.error('Error accepting meeting request:', error);
+      bot.sendMessage(chatId, 'There was an error accepting the meeting request. Please try again.');
     }
   } else if (data[0] === 'decline' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
@@ -823,7 +793,7 @@ bot.on('callback_query', async (callbackQuery) => {
         await feedbackRequestRef.update({ feedback_planned_at: feedbackDueDate, feedback_submitted: true });
 
         // Create feedback commitment
-        const feedbackCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100)+1)}`;
+        const feedbackCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
         await db.collection('feedbackCommitments').doc(feedbackCommitmentId).set({
           feedback_commitment_id: feedbackCommitmentId,
           feedback_request_id: feedbackRequestId,
