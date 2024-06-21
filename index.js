@@ -119,10 +119,11 @@ bot.onText(/\/start/, (msg) => {
   🟢 *Commitment Tracking:* Log and track all your meetings and feedbacks with precise dates, times, and descriptions.
   🟢 *Automated Reminders:* Never forget a meeting or interview with our timely reminders.
   🟢 *Feedback Enforcement:* Push Recruiters and Job seekers to share timely feedback, improving transparency and trust.
-  🟢 *Score System:* Track your reliability with a scoring system based on your commitment fulfillment.
+  🟢 *Karma System:* Track your reliability with a scoring system based on your commitment fulfillment.
   🟢 *Subscription Services:* Recruiters can subscribe for advanced features and management tools such as popular ATS integrations and more.
   
   📋 *User Guide:*
+
   *Step 1:* Registration 📖
   - */register*: Register yourself as a job seeker using your Telegram username.
   - */setrecruiter*: Switch your role to a recruiter to use recruiter features.
@@ -156,7 +157,7 @@ bot.onText(/\/start/, (msg) => {
     parse_mode: 'Markdown'
   };
 
-  bot.sendMessage(chatId, '🪄 Click *Register* to begin!', { parse_mode: 'Markdown' }, opts);
+  bot.sendMessage(chatId, '🪄 Click *Register* to begin!', { parse_mode: 'Markdown', reply_markup: opts.reply_markup });
 });
 
 // Handle callback for register button
