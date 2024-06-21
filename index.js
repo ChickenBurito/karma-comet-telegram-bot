@@ -151,13 +151,13 @@ bot.onText(/\/start/, (msg) => {
   const opts = {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '➡ Register', callback_data: 'register' }]
+        [{ text: '➡ *Register*', callback_data: 'register' }]
       ]
     },
     parse_mode: 'Markdown'
   };
 
-  bot.sendMessage(chatId, '🪄 Click *Register* to begin!', { parse_mode: 'Markdown', reply_markup: opts.reply_markup });
+  bot.sendMessage(chatId, '⬇ Click *Register* to begin 🪄!', { parse_mode: 'Markdown', reply_markup: opts.reply_markup });
 });
 
 // Handle callback for register button
@@ -167,10 +167,10 @@ bot.on('callback_query', async (callbackQuery) => {
   const data = callbackQuery.data;
 
   if (data === 'register') {
-    // Trigger the /register command
-    bot.emit('text', { chat: { id: chatId }, text: '/register' });
+    // Trigger the /register command by sending a message object
+    bot.emit('message', { chat: { id: chatId }, text: '/register', from: callbackQuery.from });
   } else if (data === 'setrecruiter') {
-    bot.emit('text', { chat: { id: chatId }, text: '/setrecruiter' });
+    bot.emit('message', { chat: { id: chatId }, text: '/setrecruiter', from: callbackQuery.from });
   } else if (data === 'continue_jobseeker') {
     bot.sendMessage(chatId, '🪩 You have chosen to continue as a *job seeker*.\n\nPlease share your *Telegram Username* with the *recruiter* so he could create a job interview meeting with you', { parse_mode: 'Markdown' });
   }
