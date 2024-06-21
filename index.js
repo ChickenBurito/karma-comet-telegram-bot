@@ -107,37 +107,45 @@ bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   const userName = msg.from.username || 'there';
 
-  const greeting = `Hi ${userName}!`;
+  const greeting = `Hi *${userName}*!`;
   const description = `
- I am KarmaComet Bot!
+ I am *KarmaComet* Bot!
 
  🌏 The first-ever solution to revolutionise the recruitment process for both job seekers and recruiters. 
  🤝 I ensure that all parties stay true to their commitments, helping everyone save time and money.
   
-  🌟 Key Features:
-  🟢 Accountability: Ensure both job seekers and recruiters keep their promises.
-  🟢 Commitment Tracking: Log and track all your meetings and feedbacks with precise dates, times, and descriptions.
-  🟢 Automated Reminders: Never forget a meeting or interview with our timely reminders.
-  🟢 Feedback Enforcement: Push Recruiters and Job seekers to share timely feedback, improving transparency and trust.
-  🟢 Score System: Track your reliability with a scoring system based on your commitment fulfillment.
-  🟢 Subscription Services: Recruiters can subscribe for advanced features and management tools such as popular ATS integrations and more.
+  🌟 *Key Features:*
+  🟢 *Accountability:* Ensure both job seekers and recruiters keep their promises.
+  🟢 *Commitment Tracking:* Log and track all your meetings and feedbacks with precise dates, times, and descriptions.
+  🟢 *Automated Reminders:* Never forget a meeting or interview with our timely reminders.
+  🟢 *Feedback Enforcement:* Push Recruiters and Job seekers to share timely feedback, improving transparency and trust.
+  🟢 *Score System:* Track your reliability with a scoring system based on your commitment fulfillment.
+  🟢 *Subscription Services:* Recruiters can subscribe for advanced features and management tools such as popular ATS integrations and more.
   
-  📋 User Guide:
-  - **/register**: Register yourself as a job seeker using your Telegram username.
-  - **/setrecruiter**: Switch your role to a recruiter.
-  - **/setjobseeker**: Switch your role back to a job seeker.
-  - **/meeting @username description**: Schedule a meeting.
-  - **/userinfo**: Check your user profile.
-  - **/meetingstatus**: See full list of scheduled meetings.
-  - **/feedbackstatus**: See full list of pending feedbacks.
-  - **/meetinghistory**: See full list of past meetings.
-  - **/feedbackhistory**: See full list of past feedbacks.
-  - **/subscribe**: Subscribe to premium recruiter services.
-  
-  KarmaComet Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!`;
+  📋 *User Guide:*
+  *Step 1:* Registration 📖
+  - */register*: Register yourself as a job seeker using your Telegram username.
+  - */setrecruiter*: Switch your role to a recruiter to use recruiter features.
+  - */setjobseeker*: Switch your role back to a job seeker if needed.
 
-  bot.sendMessage(chatId, greeting);
-  bot.sendMessage(chatId, description);
+  *Step 2:* Scheduling a meeting 📅
+  - */meeting @username description*: Schedule a meeting with a job seeker using his Telegram username and a meeting title.
+  *Note:* Feedback will be shceduled automatically 2,5 hours after a meeting.
+
+  🔎 Check your user profile, meetings and feedbacks statuses anytime!
+  - */userinfo*: Check your user profile.
+  - */meetingstatus*: See full list of your scheduled meetings.
+  - */feedbackstatus*: See full list of your scheduled feedbacks.
+  - */meetinghistory*: See full list of your past meetings.
+  - */feedbackhistory*: See full list of your past feedbacks.
+
+  👑 If you are a recruiter don't forget to subsribe for more amazing features!
+  - */subscribe*: Subscribe to recruiter services.
+  
+  *KarmaComet* Bot is here to streamline the recruitment process, ensuring every meeting, interview, and feedback session happens on time and as planned. Let's make recruitment more efficient and reliable!`;
+
+  bot.sendMessage(chatId, greeting, { parse_mode: 'Markdown' });
+  bot.sendMessage(chatId, description, { parse_mode: 'Markdown' });
   bot.sendMessage(chatId, "Type /register to get started.");
 });
 
@@ -913,14 +921,15 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     upcomingMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
 
     if (upcomingMeetings.length > 0) {
-      let responseMessage = '📂 Your Scheduled Meetings:\n';
+      let responseMessage = '📂 *Your Scheduled Meetings:*\n'; //Single line break \n
       upcomingMeetings.forEach((meeting, index) => {
-        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${meeting.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 Recruiter Name: ${meeting.recruiter_name}\n`;
-        responseMessage += `   📅 Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 Description: ${meeting.description}\n\n`;
+        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `   💼 *Job Seeker Name:* ${meeting.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 *Recruiter Name:* ${meeting.recruiter_name}\n`;
+        responseMessage += `   📅 *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 *Description:* ${meeting.description}\n\n`; //Double line break \n\n - for better visibility
       });
-      bot.sendMessage(chatId, responseMessage);
+      bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
       bot.sendMessage(chatId, '🤷 No upcoming meetings found.');
     }
@@ -965,14 +974,15 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     pastMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
 
     if (pastMeetings.length > 0) {
-      let responseMessage = '🗄 Meeting History:\n';
+      let responseMessage = '🗄 *Your Meeting History:*\n';
       pastMeetings.forEach((meeting, index) => {
-        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${meeting.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 Recruiter Name: ${meeting.recruiter_name}\n`;
-        responseMessage += `   📅 Meeting Scheduled Time: ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 Description: ${meeting.description}\n\n`;
+        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `   💼 *Job Seeker Name:* ${meeting.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 *Recruiter Name:* ${meeting.recruiter_name}\n`;
+        responseMessage += `   📅 *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 *Description:* ${meeting.description}\n\n`;
       });
-      bot.sendMessage(chatId, responseMessage);
+      bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
       bot.sendMessage(chatId, '🤷 No past meetings found.');
     }
@@ -1017,14 +1027,15 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
     upcomingFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
 
     if (upcomingFeedbacks.length > 0) {
-      let responseMessage = '🗓 Scheduled Feedbacks:\n';
+      let responseMessage = '🗓 *Your Scheduled Feedbacks:*\n';
       upcomingFeedbacks.forEach((feedback, index) => {
-        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${feedback.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 Recruiter Name: ${feedback.recruiter_name}\n`;
-        responseMessage += `   📅 Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 Description: ${feedback.description}\n\n`;
+        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `   💼 *Job Seeker Name:* ${feedback.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 *Recruiter Name:* ${feedback.recruiter_name}\n`;
+        responseMessage += `   📅 *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 *Description:* ${feedback.description}\n\n`;
       });
-      bot.sendMessage(chatId, responseMessage);
+      bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
       bot.sendMessage(chatId, '🤷 No upcoming feedbacks found.');
     }
@@ -1069,14 +1080,15 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
     pastFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
 
     if (pastFeedbacks.length > 0) {
-      let responseMessage = '🗃 Feedback History:\n';
+      let responseMessage = '🗃 *Your Feedback History:*\n';
       pastFeedbacks.forEach((feedback, index) => {
-        responseMessage += `${index + 1}. 💼 Job Seeker Name: ${feedback.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 Recruiter Name: ${feedback.recruiter_name}\n`;
-        responseMessage += `   📅 Feedback Due Date: ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 Description: ${feedback.description}\n\n`;
+        responseMessage += `${index + 1}🗳\n`;
+        responseMessage += `   💼 *Job Seeker Name:* ${feedback.counterpart_name}\n`;
+        responseMessage += `   👨‍💻 *Recruiter Name:* ${feedback.recruiter_name}\n`;
+        responseMessage += `   📅 *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   📋 *Description:* ${feedback.description}\n\n`;
       });
-      bot.sendMessage(chatId, responseMessage);
+      bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
       bot.sendMessage(chatId, '🤷 No past feedbacks found.');
     }
