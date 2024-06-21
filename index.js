@@ -1152,6 +1152,21 @@ bot.on('callback_query', async (callbackQuery) => {
           } else {
             bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}.`);
           }
+
+          // Ask the counterpart to update their attendance status
+          const counterpartId = user.data().userType === 'recruiter' ? commitment.data().counterpart_id : commitment.data().recruiter_id;
+          const opts = {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✅ Attended', callback_data: `status_${commitmentId}_attended` },
+                  { text: '🚫 Missed', callback_data: `status_${commitmentId}_missed` }
+                ]
+              ]
+            }
+          };
+
+          bot.sendMessage(counterpartId, `🔔 Please update your attendance status for the meeting "${commitment.data().description}":`, opts);
         }
       } else {
         bot.sendMessage(chatId, '🤷 Commitment not found.');
@@ -1210,6 +1225,22 @@ bot.on('callback_query', async (callbackQuery) => {
 
           bot.sendMessage(counterpartId, `🔔 Update your commitment status for "${commitment.data().description}":`, opts);
           bot.sendMessage(chatId, `🎉 Your commitment status for "${commitment.data().description}" has been updated to ${status}.`);
+
+          // Ask the counterpart to confirm if feedback was provided
+          if (commitmentType === 'feedback') {
+            const feedbackOpts = {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '✅ Feedback Provided', callback_data: `review_${commitmentId}_feedback_provided` },
+                    { text: '🚫 Feedback Not Provided', callback_data: `review_${commitmentId}_feedback_not_provided` }
+                  ]
+                ]
+              }
+            };
+
+            bot.sendMessage(counterpartId, `🔔 Did the recruiter provide feedback for the meeting "${commitment.data().description}"?`, feedbackOpts);
+          }
         }
       } else {
         bot.sendMessage(chatId, '🤷 Commitment not found.');
