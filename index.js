@@ -1145,10 +1145,6 @@ bot.on('callback_query', async (callbackQuery) => {
 
             bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new score is *${newScore}*.\n\nYour *free trial period* has started and will expire on *${moment.tz(expiryDate, userTimeZone).format('YYYY-MM-DD HH:mm*')}.`, { parse_mode: 'Markdown' });
 
-            // Automatically create feedback request after 2.5 hours
-            setTimeout(async () => {
-              bot.sendMessage(chatId, `Please specify the number of days you will take to provide feedback for the meeting "${commitment.data().description}" using the format: /feedbackdays <number_of_days>_${commitmentId}`);
-            }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
           } else {
             bot.sendMessage(chatId, `Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}.`);
           }
@@ -1616,7 +1612,7 @@ schedule.scheduleJob('0 * * * *', sendMeetingReminders);
 schedule.scheduleJob('0 * * * *', sendFeedbackReminders);
 
 app.get('/', (req, res) => {
-  res.send('Yay! KarmaComet is up and running!');
+  res.send('Yay! KarmaComet bot is up and running!');
 });
 
 const PORT = process.env.PORT || 3000;
