@@ -231,7 +231,7 @@ bot.on('callback_query', async (callbackQuery) => {
       });
 
       bot.sendMessage(chatId, `Your time zone has been set to ${timeZone}.`);
-      bot.sendMessage(chatId, `Hello, ${userDoc.data().name}! Your registration is complete. You are all set! You can now schedule your first meeting or wait for incoming requests. You can also change your role to recruiter if needed using /setrecruiter.`);
+      bot.sendMessage(chatId, `Hello, ${userDoc.data().name}! Your registration is complete. You are all set! If you are a recruiter please change your role using /setrecruiter to be able to schedule meetings.`);
     } else {
       bot.sendMessage(chatId, 'You have already set your time zone.');
     }
@@ -314,7 +314,7 @@ bot.onText(/\/setjobseeker/, async (msg) => {
           userType: 'jobSeeker'
         });
 
-        bot.sendMessage(chatId, "Your role has been updated to job seeker. Your recruiter subscription status remains unchanged.");
+        bot.sendMessage(chatId, "Your role has been updated to job seeker. Your recruiter subscription status remains unchanged until expiration date. Please note that in order to use recruiter role features you will need to switch back to recruiter role.");
       }
     } else {
       bot.sendMessage(chatId, "User not found. Please register first using /register <your_name>.");
@@ -445,6 +445,15 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   const [counterpartUsername, description] = match.slice(1);
 
   try {
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+
+    // Check if user exists and is a recruiter
+    if (!userDoc.exists || userDoc.data().userType !== 'recruiter') {
+      bot.sendMessage(chatId, 'Only recruiters can create a meeting request.');
+      return;
+    }
+
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
 
     if (!counterpartRef.empty) {
@@ -452,18 +461,13 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const counterpartId = counterpart.id;
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
-      const userRef = db.collection('users').doc(chatId.toString());
-      const userDoc = await userRef.get();
-      
-      if (userDoc.exists && userDoc.data().userType === 'recruiter') {
-        const user = userDoc.data();
-        const now = new Date();
-        const expiryDate = new Date(user.subscription.expiry);
+      const user = userDoc.data();
+      const now = new Date();
+      const expiryDate = new Date(user.subscription.expiry);
 
-        if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
-          bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
-          return;
-        }
+      if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
+        bot.sendMessage(chatId, 'Your subscription has expired. Please subscribe to continue using the service.');
+        return;
       }
 
       const recruiterCompanyName = msg.from.company_name || '';
