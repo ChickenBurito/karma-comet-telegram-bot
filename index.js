@@ -11,6 +11,7 @@ const admin = require('firebase-admin');
 const schedule = require('node-schedule');
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const moment = require('moment-timezone');
+moment.tz.load(require('moment-timezone/data/packed/latest.json'));
 
 // Check required environment variables
 const requiredEnvVars = ['STRIPE_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'BOT_URL'];
@@ -173,39 +174,39 @@ bot.onText(/\/register/, async (msg) => {
       });
       console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
 
-      // Ask for the user's time zone
-      bot.sendMessage(chatId, "Please select your time zone:", {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_UTC-12:00" }],
-            [{ text: "UTC-11:00 (American Samoa)", callback_data: "timezone_UTC-11:00" }],
-            [{ text: "UTC-10:00 (Hawaii)", callback_data: "timezone_UTC-10:00" }],
-            [{ text: "UTC-09:00 (Alaska)", callback_data: "timezone_UTC-09:00" }],
-            [{ text: "UTC-08:00 (Pacific Time)", callback_data: "timezone_UTC-08:00" }],
-            [{ text: "UTC-07:00 (Mountain Time)", callback_data: "timezone_UTC-07:00" }],
-            [{ text: "UTC-06:00 (Central Time)", callback_data: "timezone_UTC-06:00" }],
-            [{ text: "UTC-05:00 (Eastern Time)", callback_data: "timezone_UTC-05:00" }],
-            [{ text: "UTC-04:00 (Atlantic Time)", callback_data: "timezone_UTC-04:00" }],
-            [{ text: "UTC-03:00 (Argentina)", callback_data: "timezone_UTC-03:00" }],
-            [{ text: "UTC-02:00 (South Georgia)", callback_data: "timezone_UTC-02:00" }],
-            [{ text: "UTC-01:00 (Azores)", callback_data: "timezone_UTC-01:00" }],
-            [{ text: "UTC+00:00 (London)", callback_data: "timezone_UTC+00:00" }],
-            [{ text: "UTC+01:00 (Berlin)", callback_data: "timezone_UTC+01:00" }],
-            [{ text: "UTC+02:00 (Cairo)", callback_data: "timezone_UTC+02:00" }],
-            [{ text: "UTC+03:00 (Moscow)", callback_data: "timezone_UTC+03:00" }],
-            [{ text: "UTC+04:00 (Dubai)", callback_data: "timezone_UTC+04:00" }],
-            [{ text: "UTC+05:00 (Karachi)", callback_data: "timezone_UTC+05:00" }],
-            [{ text: "UTC+06:00 (Dhaka)", callback_data: "timezone_UTC+06:00" }],
-            [{ text: "UTC+07:00 (Bangkok)", callback_data: "timezone_UTC+07:00" }],
-            [{ text: "UTC+08:00 (Singapore)", callback_data: "timezone_UTC+08:00" }],
-            [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_UTC+09:00" }],
-            [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_UTC+10:00" }],
-            [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_UTC+11:00" }],
-            [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_UTC+12:00" }],
-          ]
-        }
-      });
-    }
+     // Ask for the user's time zone
+     bot.sendMessage(chatId, "Please select your time zone:", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_Pacific/Apia" }],
+          [{ text: "UTC-11:00 (American Samoa)", callback_data: "timezone_Pacific/Pago_Pago" }],
+          [{ text: "UTC-10:00 (Hawaii)", callback_data: "timezone_Pacific/Honolulu" }],
+          [{ text: "UTC-09:00 (Alaska)", callback_data: "timezone_America/Anchorage" }],
+          [{ text: "UTC-08:00 (Pacific Time)", callback_data: "timezone_America/Los_Angeles" }],
+          [{ text: "UTC-07:00 (Mountain Time)", callback_data: "timezone_America/Denver" }],
+          [{ text: "UTC-06:00 (Central Time)", callback_data: "timezone_America/Chicago" }],
+          [{ text: "UTC-05:00 (Eastern Time)", callback_data: "timezone_America/New_York" }],
+          [{ text: "UTC-04:00 (Atlantic Time)", callback_data: "timezone_America/Halifax" }],
+          [{ text: "UTC-03:00 (Argentina)", callback_data: "timezone_America/Argentina/Buenos_Aires" }],
+          [{ text: "UTC-02:00 (South Georgia)", callback_data: "timezone_Atlantic/South_Georgia" }],
+          [{ text: "UTC-01:00 (Azores)", callback_data: "timezone_Atlantic/Azores" }],
+          [{ text: "UTC+00:00 (London)", callback_data: "timezone_Europe/London" }],
+          [{ text: "UTC+01:00 (Berlin)", callback_data: "timezone_Europe/Berlin" }],
+          [{ text: "UTC+02:00 (Cairo)", callback_data: "timezone_Africa/Cairo" }],
+          [{ text: "UTC+03:00 (Moscow)", callback_data: "timezone_Europe/Moscow" }],
+          [{ text: "UTC+04:00 (Dubai)", callback_data: "timezone_Asia/Dubai" }],
+          [{ text: "UTC+05:00 (Karachi)", callback_data: "timezone_Asia/Karachi" }],
+          [{ text: "UTC+06:00 (Dhaka)", callback_data: "timezone_Asia/Dhaka" }],
+          [{ text: "UTC+07:00 (Bangkok)", callback_data: "timezone_Asia/Bangkok" }],
+          [{ text: "UTC+08:00 (Singapore)", callback_data: "timezone_Asia/Singapore" }],
+          [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_Asia/Tokyo" }],
+          [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_Australia/Sydney" }],
+          [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_Pacific/Guadalcanal" }],
+          [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_Pacific/Fiji" }],
+        ]
+      }
+    });
+  }
   } catch (error) {
     console.error('Error registering user:', error);
     bot.sendMessage(chatId, 'There was an error processing your registration. Please try again.');
@@ -1467,14 +1468,10 @@ schedule.scheduleJob('0 0 * * *', async () => {
 
   usersSnapshot.forEach(async (userDoc) => {
     const user = userDoc.data();
-    const expiryDate = new Date(user.subscription.expiry);
-    const now = new Date();
+    const expiryDate = moment(user.subscription.expiry).tz(user.timeZone || 'UTC');
+    const now = moment().tz(user.timeZone || 'UTC');
 
-    // Adjust now to the user's time zone
-    const userTimeZone = user.timeZone || 'UTC'; // Default to UTC if no time zone is set
-    const userNow = new Date(now.toLocaleString('en-US', { timeZone: userTimeZone }));
-    
-    if (user.subscription.status === 'trial' && userNow >= expiryDate) {
+    if (user.subscription.status === 'trial' && now.isSameOrAfter(expiryDate)) {
       await usersRef.doc(userDoc.id).update({
         'subscription.status': 'expired'
       });
@@ -1483,7 +1480,7 @@ schedule.scheduleJob('0 0 * * *', async () => {
   });
 });
 
-////******************////
+/******************////
 //  Send reminders logic
 ////******************////
 
@@ -1495,7 +1492,12 @@ const sendMeetingReminders = async () => {
 
   meetings.forEach(async (doc) => {
     const meeting = doc.data();
-    const meetingDate = new Date(meeting.meeting_scheduled_at);
+    const meetingDate = moment.tz(meeting.meeting_scheduled_at, meeting.recruiter_timeZone);
+
+    // Skip past meetings
+    if (meetingDate.isBefore(now)) {
+      return;
+    }
 
     // Adjust meeting date to the user's time zone
     const recruiterRef = await db.collection('users').doc(meeting.recruiter_id.toString()).get();
@@ -1504,27 +1506,22 @@ const sendMeetingReminders = async () => {
     const recruiterTimeZone = recruiterRef.exists ? recruiterRef.data().timeZone : 'UTC';
     const counterpartTimeZone = counterpartRef.exists ? counterpartRef.data().timeZone : 'UTC';
 
-    const recruiterNow = new Date(now.toLocaleString('en-US', { timeZone: recruiterTimeZone }));
-    const counterpartNow = new Date(now.toLocaleString('en-US', { timeZone: counterpartTimeZone }));
-
-    // Skip past meetings
-    if (meetingDate <= recruiterNow || meetingDate <= counterpartNow) {
-      return;
-    }
+    const recruiterNow = moment.tz(now, recruiterTimeZone);
+    const counterpartNow = moment.tz(now, counterpartTimeZone);
 
     // Reminder 24 hours before
-    if ((meetingDate - recruiterNow) <= 24 * 60 * 60 * 1000 && (meetingDate - recruiterNow) > 23 * 60 * 60 * 1000) {
-      bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+    if (meetingDate.diff(recruiterNow, 'hours') === 24) {
+      bot.sendMessage(meeting.recruiter_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.counterpart_name} scheduled on ${meetingDate.format()}.`);
     }
-    if ((meetingDate - counterpartNow) <= 24 * 60 * 60 * 1000 && (meetingDate - counterpartNow) > 23 * 60 * 60 * 1000) {
-      bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meeting.meeting_scheduled_at}.`);
+    if (meetingDate.diff(counterpartNow, 'hours') === 24) {
+      bot.sendMessage(meeting.counterpart_id, `Reminder: You have a meeting "${meeting.description}" with ${meeting.recruiter_name} scheduled on ${meetingDate.format()}.`);
     }
 
     // Reminder 1 hour before
-    if ((meetingDate - recruiterNow) <= 1 * 60 * 60 * 1000 && (meetingDate - recruiterNow) > 59 * 60 * 1000) {
+    if (meetingDate.diff(recruiterNow, 'hours') === 1) {
       bot.sendMessage(meeting.recruiter_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.counterpart_name} is happening in 1 hour.`);
     }
-    if ((meetingDate - counterpartNow) <= 1 * 60 * 60 * 1000 && (meetingDate - counterpartNow) > 59 * 60 * 1000) {
+    if (meetingDate.diff(counterpartNow, 'hours') === 1) {
       bot.sendMessage(meeting.counterpart_id, `Reminder: Your meeting "${meeting.description}" with ${meeting.recruiter_name} is happening in 1 hour.`);
     }
   });
@@ -1538,7 +1535,12 @@ const sendFeedbackReminders = async () => {
 
   feedbacks.forEach(async (doc) => {
     const feedback = doc.data();
-    const feedbackDate = new Date(feedback.feedback_scheduled_at);
+    const feedbackDate = moment.tz(feedback.feedback_scheduled_at, feedback.recruiter_timeZone);
+
+    // Skip past feedbacks
+    if (feedbackDate.isBefore(now)) {
+      return;
+    }
 
     // Adjust feedback date to the user's time zone
     const recruiterRef = await db.collection('users').doc(feedback.recruiter_id.toString()).get();
@@ -1547,27 +1549,22 @@ const sendFeedbackReminders = async () => {
     const recruiterTimeZone = recruiterRef.exists ? recruiterRef.data().timeZone : 'UTC';
     const counterpartTimeZone = counterpartRef.exists ? counterpartRef.data().timeZone : 'UTC';
 
-    const recruiterNow = new Date(now.toLocaleString('en-US', { timeZone: recruiterTimeZone }));
-    const counterpartNow = new Date(now.toLocaleString('en-US', { timeZone: counterpartTimeZone }));
-
-    // Skip past feedbacks
-    if (feedbackDate <= recruiterNow || feedbackDate <= counterpartNow) {
-      return;
-    }
+    const recruiterNow = moment.tz(now, recruiterTimeZone);
+    const counterpartNow = moment.tz(now, counterpartTimeZone);
 
     // Reminder 24 hours before
-    if ((feedbackDate - recruiterNow) <= 24 * 60 * 60 * 1000 && (feedbackDate - recruiterNow) > 23 * 60 * 60 * 1000) {
-      bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedback.feedback_scheduled_at}.`);
+    if (feedbackDate.diff(recruiterNow, 'hours') === 24) {
+      bot.sendMessage(feedback.recruiter_id, `Reminder: You need to provide feedback for your meeting with ${feedback.counterpart_name} by ${feedbackDate.format()}.`);
     }
-    if ((feedbackDate - counterpartNow) <= 24 * 60 * 60 * 1000 && (feedbackDate - counterpartNow) > 23 * 60 * 60 * 1000) {
-      bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedback.feedback_scheduled_at}.`);
+    if (feedbackDate.diff(counterpartNow, 'hours') === 24) {
+      bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name} needs to provide feedback for your meeting by ${feedbackDate.format()}.`);
     }
 
     // Reminder 1 hour before
-    if ((feedbackDate - recruiterNow) <= 1 * 60 * 60 * 1000 && (feedbackDate - recruiterNow) > 59 * 60 * 1000) {
+    if (feedbackDate.diff(recruiterNow, 'hours') === 1) {
       bot.sendMessage(feedback.recruiter_id, `Reminder: Your feedback for the meeting with ${feedback.counterpart_name} is due in 1 hour.`);
     }
-    if ((feedbackDate - counterpartNow) <= 1 * 60 * 60 * 1000 && (feedbackDate - counterpartNow) > 59 * 60 * 1000) {
+    if (feedbackDate.diff(counterpartNow, 'hours') === 1) {
       bot.sendMessage(feedback.counterpart_id, `Reminder: ${feedback.recruiter_name}'s feedback for your meeting is due in 1 hour.`);
     }
   });
