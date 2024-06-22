@@ -327,6 +327,17 @@ bot.on('callback_query', async (callbackQuery) => {
   const chatId = msg.chat.id;
   const data = callbackQuery.data;
 
+  if (data === 'recruiter_individual' || data === 'recruiter_company') {
+    handleRecruiterType(callbackQuery);
+  }
+});
+
+// Function to handle recruiter type selection
+const handleRecruiterType = async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data;
+
   if (data === 'recruiter_individual') {
     try {
       await db.collection('users').doc(chatId.toString()).update({
@@ -341,7 +352,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data === 'recruiter_company') {
     bot.sendMessage(chatId, 'Please enter your *company name* using the format: */company {company name}*', { parse_mode: 'Markdown' });
   }
-});
+};
 
 // Handle company name input
 bot.onText(/\/company (.+)/, async (msg, match) => {
