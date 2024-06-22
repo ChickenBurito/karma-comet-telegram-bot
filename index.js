@@ -101,6 +101,74 @@ bot.setMyCommands(commands)
     console.error('Error setting bot commands:', err);
   });
 
+// Function to handle user registration
+const registerUser = async (chatId, userName) => {
+  try {
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+
+    if (userDoc.exists) {
+      console.log(`User ${userName} with chat ID: ${chatId} is already registered.`);
+      bot.sendMessage(chatId, '🙌 You are already registered.');
+    } else {
+      console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
+      await userRef.set({
+        name: userName,
+        chatId: chatId,
+        registered_at: new Date().toISOString(),
+        score: 0,
+        userType: 'jobSeeker', // Default user type
+        isAdmin: false,
+        subscription: {
+          status: 'free',
+          expiry: null
+        },
+        timeZone: null // Initialize timeZone as null
+      });
+      console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
+      askForTimeZone(chatId);
+    }
+  } catch (error) {
+    console.error('Error registering user:', error);
+    bot.sendMessage(chatId, '🛠 There was an error processing your registration. Please try again.');
+  }
+};
+
+// Function to ask for the user's time zone
+const askForTimeZone = (chatId) => {
+  bot.sendMessage(chatId, "🌍 Please select your time zone:", {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_Pacific/Apia" }],
+        [{ text: "UTC-11:00 (American Samoa)", callback_data: "timezone_Pacific/Pago_Pago" }],
+        [{ text: "UTC-10:00 (Hawaii)", callback_data: "timezone_Pacific/Honolulu" }],
+        [{ text: "UTC-09:00 (Alaska)", callback_data: "timezone_America/Anchorage" }],
+        [{ text: "UTC-08:00 (Pacific Time)", callback_data: "timezone_America/Los_Angeles" }],
+        [{ text: "UTC-07:00 (Mountain Time)", callback_data: "timezone_America/Denver" }],
+        [{ text: "UTC-06:00 (Central Time)", callback_data: "timezone_America/Chicago" }],
+        [{ text: "UTC-05:00 (Eastern Time)", callback_data: "timezone_America/New_York" }],
+        [{ text: "UTC-04:00 (Atlantic Time)", callback_data: "timezone_America/Halifax" }],
+        [{ text: "UTC-03:00 (Argentina)", callback_data: "timezone_America/Argentina/Buenos_Aires" }],
+        [{ text: "UTC-02:00 (South Georgia)", callback_data: "timezone_Atlantic/South_Georgia" }],
+        [{ text: "UTC-01:00 (Azores)", callback_data: "timezone_Atlantic/Azores" }],
+        [{ text: "UTC+00:00 (London)", callback_data: "timezone_Europe/London" }],
+        [{ text: "UTC+01:00 (Berlin)", callback_data: "timezone_Europe/Berlin" }],
+        [{ text: "UTC+02:00 (Cairo)", callback_data: "timezone_Africa/Cairo" }],
+        [{ text: "UTC+03:00 (Moscow)", callback_data: "timezone_Europe/Moscow" }],
+        [{ text: "UTC+04:00 (Dubai)", callback_data: "timezone_Asia/Dubai" }],
+        [{ text: "UTC+05:00 (Karachi)", callback_data: "timezone_Asia/Karachi" }],
+        [{ text: "UTC+06:00 (Dhaka)", callback_data: "timezone_Asia/Dhaka" }],
+        [{ text: "UTC+07:00 (Bangkok)", callback_data: "timezone_Asia/Bangkok" }],
+        [{ text: "UTC+08:00 (Singapore)", callback_data: "timezone_Asia/Singapore" }],
+        [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_Asia/Tokyo" }],
+        [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_Australia/Sydney" }],
+        [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_Pacific/Guadalcanal" }],
+        [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_Pacific/Fiji" }],
+      ]
+    }
+  });
+};
+
 // Handle /start command
 bot.onText(/\/start/, (msg) => {
   console.log('/start command received');
@@ -123,7 +191,6 @@ bot.onText(/\/start/, (msg) => {
   🟢 *Subscription Services:* Recruiters can subscribe for advanced features and management tools such as popular ATS integrations and more.
   
   📋 *User Guide:*
-
   *Step 1:* Registration 📖
   - */register*: Register with your Telegram username.
   - */setrecruiter*: Switch your role to a recruiter to use recruiter features.
@@ -153,111 +220,23 @@ bot.onText(/\/start/, (msg) => {
       inline_keyboard: [
         [{ text: '➡ Register', callback_data: 'register' }]
       ]
-    }
+    },
+    parse_mode: 'Markdown'
   };
 
-  bot.sendMessage(chatId, '⬇⬇ Click *Register* button to begin ⬇⬇', { parse_mode: 'Markdown', reply_markup: opts.reply_markup });
+  bot.sendMessage(chatId, '⬇⬇ Click *Register* button to begin ⬇⬇', opts);
 });
 
-// Handle callback for register button
+// Handle callback query for registration and role selection
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
   const data = callbackQuery.data;
 
   if (data === 'register') {
-    // Trigger the /register command by calling the register function directly
-    registerUser(callbackQuery.message, chatId);
-  } else if (data === 'setrecruiter') {
-    bot.emit('message', { chat: { id: chatId }, text: '/setrecruiter', from: callbackQuery.from });
-  } else if (data === 'continue_jobseeker') {
-    bot.sendMessage(chatId, 'You have chosen to continue as a job seeker.');
-  }
-});
-
-////************************************************////
-//++// User registration and Roles selection //++/////
-////**********************************************////
-
-// Handle /register command with telegram username
-bot.onText(/\/register/, async (msg) => {
-  console.log('/register command received');
-  registerUser(msg, msg.chat.id);
-});
-
-const registerUser = async (msg, chatId) => {
-  const userName = msg.from.username || 'User';
-
-  try {
-    const userRef = db.collection('users').doc(chatId.toString());
-    const userDoc = await userRef.get();
-
-    if (userDoc.exists) {
-      console.log(`User ${userName} with chat ID: ${chatId} is already registered.`);
-      bot.sendMessage(chatId, '🙌 You are already registered.');
-    } else {
-      console.log(`Registering user: ${userName} with chat ID: ${chatId}`);
-      await userRef.set({
-        name: userName,
-        chatId: chatId,
-        registered_at: new Date().toISOString(),
-        score: 0,
-        userType: 'jobSeeker', // Default user type
-        isAdmin: false,
-        subscription: {
-          status: 'free',
-          expiry: null
-        },
-        timeZone: null // Initialize timeZone as null
-      });
-      console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
-
-     // Ask for the user's time zone
-     bot.sendMessage(chatId, "🌍 Please select your time zone:", {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "UTC-12:00 (Baker Island)", callback_data: "timezone_Pacific/Apia" }],
-          [{ text: "UTC-11:00 (American Samoa)", callback_data: "timezone_Pacific/Pago_Pago" }],
-          [{ text: "UTC-10:00 (Hawaii)", callback_data: "timezone_Pacific/Honolulu" }],
-          [{ text: "UTC-09:00 (Alaska)", callback_data: "timezone_America/Anchorage" }],
-          [{ text: "UTC-08:00 (Pacific Time)", callback_data: "timezone_America/Los_Angeles" }],
-          [{ text: "UTC-07:00 (Mountain Time)", callback_data: "timezone_America/Denver" }],
-          [{ text: "UTC-06:00 (Central Time)", callback_data: "timezone_America/Chicago" }],
-          [{ text: "UTC-05:00 (Eastern Time)", callback_data: "timezone_America/New_York" }],
-          [{ text: "UTC-04:00 (Atlantic Time)", callback_data: "timezone_America/Halifax" }],
-          [{ text: "UTC-03:00 (Argentina)", callback_data: "timezone_America/Argentina/Buenos_Aires" }],
-          [{ text: "UTC-02:00 (South Georgia)", callback_data: "timezone_Atlantic/South_Georgia" }],
-          [{ text: "UTC-01:00 (Azores)", callback_data: "timezone_Atlantic/Azores" }],
-          [{ text: "UTC+00:00 (London)", callback_data: "timezone_Europe/London" }],
-          [{ text: "UTC+01:00 (Berlin)", callback_data: "timezone_Europe/Berlin" }],
-          [{ text: "UTC+02:00 (Cairo)", callback_data: "timezone_Africa/Cairo" }],
-          [{ text: "UTC+03:00 (Moscow)", callback_data: "timezone_Europe/Moscow" }],
-          [{ text: "UTC+04:00 (Dubai)", callback_data: "timezone_Asia/Dubai" }],
-          [{ text: "UTC+05:00 (Karachi)", callback_data: "timezone_Asia/Karachi" }],
-          [{ text: "UTC+06:00 (Dhaka)", callback_data: "timezone_Asia/Dhaka" }],
-          [{ text: "UTC+07:00 (Bangkok)", callback_data: "timezone_Asia/Bangkok" }],
-          [{ text: "UTC+08:00 (Singapore)", callback_data: "timezone_Asia/Singapore" }],
-          [{ text: "UTC+09:00 (Tokyo)", callback_data: "timezone_Asia/Tokyo" }],
-          [{ text: "UTC+10:00 (Sydney)", callback_data: "timezone_Australia/Sydney" }],
-          [{ text: "UTC+11:00 (Solomon Islands)", callback_data: "timezone_Pacific/Guadalcanal" }],
-          [{ text: "UTC+12:00 (Fiji)", callback_data: "timezone_Pacific/Fiji" }],
-        ]
-      }
-    });
-  }
-  } catch (error) {
-    console.error('Error registering user:', error);
-    bot.sendMessage(chatId, '🛠 There was an error processing your registration. Please try again.');
-  }
-};
-
-// Handle callback for time zone selection
-bot.on('callback_query', async (callbackQuery) => {
-  const msg = callbackQuery.message;
-  const chatId = msg.chat.id;
-  const data = callbackQuery.data;
-
-  if (data.startsWith('timezone_')) {
+    const userName = callbackQuery.from.username || 'User'; // Use callbackQuery.from.username
+    await registerUser(chatId, userName);
+  } else if (data.startsWith('timezone_')) {
     const timeZone = data.split('_')[1];
 
     const userRef = db.collection('users').doc(chatId.toString());
@@ -269,7 +248,7 @@ bot.on('callback_query', async (callbackQuery) => {
       });
 
       bot.sendMessage(chatId, `🕑 Your time zone has been set to ${timeZone}.`);
-      bot.sendMessage(chatId, `**Hello, ${userDoc.data().name}!**\n✅ Your registration is complete!\n\nIf you are a recruiter please change your role using /setrecruiter to be able to schedule meetings.`, { parse_mode: 'Markdown' });
+      bot.sendMessage(chatId, `**Hello, ${userDoc.data().name}!**\n✅ Your registration is complete!\n\nIf you are a recruiter, please change your role using /setrecruiter to be able to schedule meetings.`, { parse_mode: 'Markdown' });
 
       // Buttons to change role to recruiter or continue as job seeker
       const opts = {
@@ -284,7 +263,20 @@ bot.on('callback_query', async (callbackQuery) => {
     } else {
       bot.sendMessage(chatId, '🙌 You have already set your time zone.');
     }
+  } else if (data === 'setrecruiter') {
+    bot.emit('message', { chat: { id: chatId }, text: '/setrecruiter', from: callbackQuery.from });
+  } else if (data === 'continue_jobseeker') {
+    bot.sendMessage(chatId, 'You have chosen to continue as a job seeker.');
   }
+});
+
+// Handle /register command
+bot.onText(/\/register/, async (msg) => {
+  console.log('/register command received');
+  const chatId = msg.chat.id;
+  const userName = msg.from.username || 'User';
+
+  await registerUser(chatId, userName);
 });
 
 // Handle /setrecruiter command
