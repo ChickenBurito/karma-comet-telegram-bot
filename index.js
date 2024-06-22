@@ -324,7 +324,7 @@ bot.on('callback_query', async (callbackQuery) => {
       bot.sendMessage(chatId, '🛠 There was an error updating your role. Please try again.');
     }
   } else if (data === 'recruiter_company') {
-    bot.sendMessage(chatId, 'Please enter your *company name* using the format: */company <company_name>*', { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, 'Please enter your *company name* using the format: */company {company name}*', { parse_mode: 'Markdown' });
   }
 });
 
@@ -339,7 +339,7 @@ bot.onText(/\/company (.+)/, async (msg, match) => {
       recruiterType: 'company',
       companyName: companyName
     });
-    bot.sendMessage(chatId, `You are now registered as a company recruiter for **${companyName}**. 🚀 It is time to schedule your **first meeting!**\n\nType **/meeting @username {meeting description}** where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide.\n\nIf you want to switch back to **Job Seeker** role just type */setjobseeker*.`, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, `You are now registered as a company recruiter for *${companyName}*\n🚀 It is time to schedule your *first meeting!*\n\nType */meeting @username {meeting description}* where {username} is the Telegram username of the Job seeker and {meeting description} is any meeting title.\n\nIf you want to switch back to *Job Seeker* role just type */setjobseeker*.`, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('Error setting company recruiter role:', error);
     bot.sendMessage(chatId, '🛠 There was an error updating your role. Please try again.');
@@ -906,15 +906,20 @@ bot.onText(/\/userinfo/, async (msg) => {
       const userTimeZone = userData.timeZone || 'UTC';
       const registeredAt = moment.tz(userData.registered_at, userTimeZone).format('YYYY-MM-DD HH:mm');
 
-      let responseMessage = `*Username:* ${userData.name}\n`;
+      // Properly escape special characters for Markdown
+      const escapeMarkdown = (text) => {
+        return text.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1');
+      };
+
+      let responseMessage = `*Username:* ${escapeMarkdown(userData.name)}\n`;
       responseMessage += `*Member since:* ${registeredAt}\n`;
-      responseMessage += `*User Type:* ${userData.userType}\n`;
-      responseMessage += `*Recruiter Type:* ${userData.recruiterType || 'N/A'}\n`;
-      responseMessage += `*Subscription Status:* ${userData.subscription.status}\n`;
+      responseMessage += `*User Type:* ${escapeMarkdown(userData.userType)}\n`;
+      responseMessage += `*Recruiter Type:* ${escapeMarkdown(userData.recruiterType || 'N/A')}\n`;
+      responseMessage += `*Subscription Status:* ${escapeMarkdown(userData.subscription.status)}\n`;
       responseMessage += `*Subscription Expiry Date:* ${userData.subscription.expiry ? moment.tz(userData.subscription.expiry, userTimeZone).format('YYYY-MM-DD HH:mm') : 'N/A'}\n`;
       responseMessage += `*Score:* ${userData.score}\n`;
-      responseMessage += `*Company Name:* ${userData.companyName || 'N/A'}\n`;
-      responseMessage += `*Time Zone:* ${userData.timeZone || 'UTC'}\n`;
+      responseMessage += `*Company Name:* ${escapeMarkdown(userData.companyName || 'N/A')}\n`;
+      responseMessage += `*Time Zone:* ${escapeMarkdown(userData.timeZone || 'UTC')}\n`;
 
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
