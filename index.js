@@ -191,6 +191,7 @@ bot.onText(/\/start/, (msg) => {
   🟢 *Subscription Services:* Recruiters can subscribe for advanced features and management tools such as popular ATS integrations and more.
   
   📋 *User Guide:*
+
   *Step 1:* Registration 📖
   - */register*: Register with your Telegram username.
   - */setrecruiter*: Switch your role to a recruiter to use recruiter features.
@@ -218,7 +219,7 @@ bot.onText(/\/start/, (msg) => {
   const opts = {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '➡ Register', callback_data: 'register' }]
+        [{ text: '--- Register ---', callback_data: 'register' }]
       ]
     },
     parse_mode: 'Markdown'
@@ -277,7 +278,18 @@ bot.on('callback_query', async (callbackQuery) => {
     bot.sendMessage(chatId, '👨‍💻 Are you an individual recruiter or registering as a company?', opts);
   } else if (data === 'continue_jobseeker') {
     bot.sendMessage(chatId, 'You have chosen to continue as a job seeker.');
-  } else if (data === 'recruiter_individual') {
+  } else if (data === 'recruiter_individual' || data === 'recruiter_company') {
+    await handleRecruiterType(callbackQuery);
+  }
+});
+
+// Function to handle recruiter type selection
+const handleRecruiterType = async (callbackQuery) => {
+  const msg = callbackQuery.message;
+  const chatId = msg.chat.id;
+  const data = callbackQuery.data;
+
+  if (data === 'recruiter_individual') {
     try {
       await db.collection('users').doc(chatId.toString()).update({
         userType: 'recruiter',
@@ -291,7 +303,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data === 'recruiter_company') {
     bot.sendMessage(chatId, 'Please enter your *company name* using the format: */company {company name}*', { parse_mode: 'Markdown' });
   }
-});
+};
 
 // Handle /register command
 bot.onText(/\/register/, async (msg) => {
@@ -320,39 +332,6 @@ bot.onText(/\/setrecruiter/, async (msg) => {
 
   bot.sendMessage(chatId, '👨‍💻 Are you an individual recruiter or registering as a company?', opts);
 });
-
-// Handle callback query for recruiter type
-bot.on('callback_query', async (callbackQuery) => {
-  const msg = callbackQuery.message;
-  const chatId = msg.chat.id;
-  const data = callbackQuery.data;
-
-  if (data === 'recruiter_individual' || data === 'recruiter_company') {
-    handleRecruiterType(callbackQuery);
-  }
-});
-
-// Function to handle recruiter type selection
-const handleRecruiterType = async (callbackQuery) => {
-  const msg = callbackQuery.message;
-  const chatId = msg.chat.id;
-  const data = callbackQuery.data;
-
-  if (data === 'recruiter_individual') {
-    try {
-      await db.collection('users').doc(chatId.toString()).update({
-        userType: 'recruiter',
-        recruiterType: 'individual'
-      });
-      bot.sendMessage(chatId, 'You are now registered as an **individual recruiter**🥷. 🚀 It is time to schedule your first meeting!\n\nType **/meeting @username {meeting description}** where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide.\n\nIf you want to switch back to **Job Seeker** role just type */setjobseeker*.', { parse_mode: 'Markdown' });
-    } catch (error) {
-      console.error('Error setting recruiter role:', error);
-      bot.sendMessage(chatId, '🛠 There was an error updating your role. Please try again.');
-    }
-  } else if (data === 'recruiter_company') {
-    bot.sendMessage(chatId, 'Please enter your *company name* using the format: */company {company name}*', { parse_mode: 'Markdown' });
-  }
-};
 
 // Handle company name input
 bot.onText(/\/company (.+)/, async (msg, match) => {
