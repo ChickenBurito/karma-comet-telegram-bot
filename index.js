@@ -120,7 +120,7 @@ const registerUser = async (chatId, userName) => {
         userType: 'jobSeeker', // Default user type
         isAdmin: false,
         subscription: {
-          status: 'free',
+          status: 'free', // Default to free
           expiry: null
         },
         timeZone: null // Initialize timeZone as null
@@ -169,7 +169,7 @@ const askForTimeZone = (chatId) => {
   });
 };
 
-// Handle /start command
+//------------- Handle /start command --------------//
 bot.onText(/\/start/, (msg) => {
   console.log('/start command received');
   const chatId = msg.chat.id;
@@ -198,7 +198,7 @@ bot.onText(/\/start/, (msg) => {
   - */setjobseeker*: Switch your role back to a job seeker if needed.
 
   *Step 2:* Scheduling a meeting 📅
-  - */meeting @username description*: Schedule a meeting with a job seeker using his Telegram username and a meeting title.
+  - */meeting @username description*\nSchedule a meeting with a job seeker using his Telegram username and a meeting title.
   
   ℹ️ *Note:* *Feedback* requests and *Reminders* will be scheduled fully *automatically* 🔁
 
@@ -296,7 +296,9 @@ const handleRecruiterType = async (callbackQuery) => {
     try {
       await db.collection('users').doc(chatId.toString()).update({
         userType: 'recruiter',
-        recruiterType: 'individual'
+        recruiterType: 'individual',
+        'subscription.status': 'free', // Ensure subscription status is free initially
+        'subscription.expiry': null // No expiry date initially
       });
       bot.sendMessage(chatId, '✅ You are now registered as an *individual recruiter*.\n🚀 It is time to schedule your first meeting!\n\n➡ Type */meeting @username {meeting description}* where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide.\n\nIf you want to switch back to *Job Seeker* role just type */setjobseeker*.', { parse_mode: 'Markdown' });
     } catch (error) {
@@ -308,7 +310,7 @@ const handleRecruiterType = async (callbackQuery) => {
   }
 };
 
-// Handle /register command
+//--------------- Handle /register command ------------------//
 bot.onText(/\/register/, async (msg) => {
   console.log('/register command received');
   const chatId = msg.chat.id;
@@ -317,7 +319,7 @@ bot.onText(/\/register/, async (msg) => {
   await registerUser(chatId, userName);
 });
 
-// Handle /setrecruiter command
+//--------------- Handle /setrecruiter command ---------------//
 bot.onText(/\/setrecruiter/, async (msg) => {
   console.log('/setrecruiter command received');
   const chatId = msg.chat.id;
@@ -336,7 +338,7 @@ bot.onText(/\/setrecruiter/, async (msg) => {
   bot.sendMessage(chatId, '👨‍💻 Are you an individual recruiter or registering as a company?', opts);
 });
 
-// Handle company name input
+//--------------- Handle company name input ----------------//
 bot.onText(/\/company (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const companyName = match[1];
@@ -354,7 +356,7 @@ bot.onText(/\/company (.+)/, async (msg, match) => {
   }
 });
 
-// Handle /setjobseeker command
+//------------ Handle /setjobseeker command -------------//
 bot.onText(/\/setjobseeker/, async (msg) => {
   console.log('/setjobseeker command received');
   const chatId = msg.chat.id;
@@ -385,7 +387,7 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 // List of authorized user IDs or usernames for testing commands
 const resetAuthorizedUsers = ['klngnv','kriskolgan']; // Add your username or user ID here
 
-// Handle /reset command for testing purposes
+//----------- Handle /reset command for testing purposes -----------//
 bot.onText(/\/reset/, async (msg) => {
   console.log('/reset command received');
   const chatId = msg.chat.id;
@@ -456,7 +458,8 @@ const broadcastMessage = async (message) => {
   }
 };
 
-// Handle /broadcast command (admin only)
+//------ Handle /broadcast command (!!!admin only!!!) --------//
+//-- NOTE: set "isAmdmin" to "true" only trough Firebase DB --//
 bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const message = match[1];
@@ -473,7 +476,7 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   }
 });
 
-// Handle /directmessage command (admin only)
+//------- Handle /directmessage command (!!!admin only!!!) ---------//
 bot.onText(/\/directmessage (\d+) (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const targetChatId = match[1];
@@ -491,11 +494,11 @@ bot.onText(/\/directmessage (\d+) (.+)/, async (msg, match) => {
   }
 });
 
-////*********************************////
-//++// Handle meeting commitments //++//
-////*******************************////
+////**********************************************************////
+//++// Handle meeting and fedback requests and commitments //++//
+////********************************************************////
 
-// Handle /meeting command
+//------------------ Handle /meeting command --------------------//
 bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
@@ -518,7 +521,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         const expiryDate = new Date(user.subscription.expiry);
 
         if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
-          bot.sendMessage(chatId, '👾 Your subscription has **expired**!\n\nPlease **subscribe** to continue using the service.', { parse_mode: 'Markdown' });
+          bot.sendMessage(chatId, '👾 Your subscription has *expired*!\n\nPlease *subscribe** to continue using the service.', { parse_mode: 'Markdown' });
           return;
         }
       }
@@ -529,7 +532,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       // Generate a unique meeting request ID
       const meetingRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
 
-      // Store the meeting request in Firestore
+      //------------ Store the meeting request in Firestore -----------//
       await db.collection('meetingRequests').doc(meetingRequestId).set({
         recruiter_name: recruiterName,
         recruiter_company_name: recruiterCompanyName,
@@ -751,7 +754,7 @@ bot.on('callback_query', async (callbackQuery) => {
           const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', request.data().timeZone);
           const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
 
-          // Create a meeting commitment
+          //------------------ Create a meeting commitment -------------------//
           const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
           await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
             recruiter_name: request.data().recruiter_name,
@@ -775,7 +778,7 @@ bot.on('callback_query', async (callbackQuery) => {
           bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${selectedTimeSlot}.`);
           bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}.\n\n📍 Meeting is scheduled at ${selectedTimeSlot}.`);
 
-          // Schedule feedback request generation after 2.5 hours
+          //-------------- Schedule feedback request generation after 2.5 hours ----------//
           setTimeout(async () => {
             const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
             const commitment = await commitmentRef.get();
@@ -801,7 +804,26 @@ bot.on('callback_query', async (callbackQuery) => {
               bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}" using the format: */feedbackdays {number_of_days}*`, { parse_mode: 'Markdown' });
             }
           }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
+          
+          //-------- Activate trial if subscription is free and meeting is accepted ---------//
+          const userRef = db.collection('users').doc(recruiter_id.toString());
+          const userDoc = await userRef.get();
+          if (userDoc.exists && userDoc.data().subscription.status === 'free') {
+            // Get the current date
+            const trialExpiryDate = new Date();
 
+            // Add 14 days to the current date to set the trial expiration date
+            trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
+
+            // Update the user's subscription status to 'trial' and set the expiration date
+            await userRef.update({
+              'subscription.status': 'trial',
+              'subscription.expiry': trialExpiryDate.toISOString()
+            });
+
+            // Notify the user about their trial subscription activation
+            bot.sendMessage(recruiter_id, `🚀 Your *trial subscription* is now active for 14 days, expiring on ${moment(trialExpiryDate).format('YYYY-MM-DD HH:mm')}.`);
+          }
         } else {
           bot.sendMessage(chatId, '🙅 Invalid time slot selected.');
         }
@@ -849,7 +871,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
         await feedbackRequestRef.update({ feedback_planned_at: feedbackDueDate, feedback_submitted: true });
 
-        // Create feedback commitment
+        //--------------- Create feedback commitment -----------------//
         const feedbackCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
         await db.collection('feedbackCommitments').doc(feedbackCommitmentId).set({
           feedback_commitment_id: feedbackCommitmentId,
@@ -900,7 +922,7 @@ bot.on('callback_query', async (callbackQuery) => {
 // Users, Meetings and Feedback status check
 ////************************************////
 
-// Handle /userinfo command
+//-------------- Handle /userinfo command ----------------//
 bot.onText(/\/userinfo/, async (msg) => {
   console.log('/userinfo command received');
   const chatId = msg.chat.id;
@@ -939,7 +961,7 @@ bot.onText(/\/userinfo/, async (msg) => {
   }
 });
 
-// Handle /meetingstatus command
+//----------------- Handle /meetingstatus command ----------------//
 bot.onText(/\/meetingstatus/, async (msg) => {
   console.log('/meetingstatus command received');
   const chatId = msg.chat.id;
@@ -992,7 +1014,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
   }
 });
 
-// Handle /meetinghistory command
+//------------------- Handle /meetinghistory command ------------------//
 bot.onText(/\/meetinghistory/, async (msg) => {
   console.log('/meetinghistory command received');
   const chatId = msg.chat.id;
@@ -1045,7 +1067,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
   }
 });
 
-// Handle /feedbackstatus command
+//------------- Handle /feedbackstatus command ---------------//
 bot.onText(/\/feedbackstatus/, async (msg) => {
   console.log('/feedbackstatus command received');
   const chatId = msg.chat.id;
@@ -1098,7 +1120,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
   }
 });
 
-// Handle /feedbackhistory command
+//--------------- Handle /feedbackhistory command ---------------//
 bot.onText(/\/feedbackhistory/, async (msg) => {
   console.log('/feedbackhistory command received');
   const chatId = msg.chat.id;
@@ -1182,25 +1204,9 @@ bot.on('callback_query', async (callbackQuery) => {
           await userRef.update({ score: newScore });
 
           // Retrieve the user's time zone from the database
-          const userTimeZone = user.data().timeZone || 'UTC';
+          const userTimeZone = user.data().timeZone || 'UTC'
 
-          // Check for recruiter and update subscription status
-          if (user.data().userType === 'recruiter' && status === 'attended' && user.data().subscription.status === 'free') {
-            const expiryDate = new Date();
-            expiryDate.setDate(expiryDate.getDate() + 14);
-
-            await userRef.update({
-              subscription: {
-                status: 'trial',
-                expiry: expiryDate.toISOString()
-              }
-            });
-
-            bot.sendMessage(chatId, `❗ Your status for meeting commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new score is *${newScore}*.\n\nYour *free trial period* has started and will expire on *${moment.tz(expiryDate, userTimeZone).format('YYYY-MM-DD HH:mm*')}.`, { parse_mode: 'Markdown' });
-
-          } else {
-            bot.sendMessage(chatId, `❗ Your status for commitment "${commitment.data().description}" has been updated to ${status}. Your new score is ${newScore}.`);
-          }
+          bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new score is *${newScore}*.`, { parse_mode: 'Markdown' });
 
           // Ask the counterpart to update their attendance status
           const counterpartId = user.data().userType === 'recruiter' ? commitment.data().counterpart_id : commitment.data().recruiter_id;
