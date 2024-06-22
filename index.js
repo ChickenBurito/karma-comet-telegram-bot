@@ -254,7 +254,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const opts = {
         reply_markup: {
           inline_keyboard: [
-            [{ text: '👨‍💼 Change role to recruiter', callback_data: 'setrecruiter' }],
+            [{ text: '👨‍💼 Change role to recruiter', callback_data: 'prompt_setrecruiter' }],
             [{ text: '🔍 Continue as job seeker', callback_data: 'continue_jobseeker' }]
           ]
         }
@@ -263,7 +263,7 @@ bot.on('callback_query', async (callbackQuery) => {
     } else {
       bot.sendMessage(chatId, '🙌 You have already set your time zone.');
     }
-  } else if (data === 'setrecruiter') {
+  } else if (data === 'prompt_setrecruiter') {
     bot.emit('message', { chat: { id: chatId }, text: '/setrecruiter', from: callbackQuery.from });
   } else if (data === 'continue_jobseeker') {
     bot.sendMessage(chatId, 'You have chosen to continue as a job seeker.');
