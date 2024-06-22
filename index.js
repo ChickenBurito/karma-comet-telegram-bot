@@ -264,9 +264,32 @@ bot.on('callback_query', async (callbackQuery) => {
       bot.sendMessage(chatId, '🙌 You have already set your time zone.');
     }
   } else if (data === 'prompt_setrecruiter') {
-    bot.emit('message', { chat: { id: chatId }, text: '/setrecruiter', from: callbackQuery.from });
+    const opts = {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🥷 Individual', callback_data: 'recruiter_individual' },
+            { text: '📇 Company', callback_data: 'recruiter_company' }
+          ]
+        ]
+      }
+    };
+    bot.sendMessage(chatId, '👨‍💻 Are you an individual recruiter or registering as a company?', opts);
   } else if (data === 'continue_jobseeker') {
     bot.sendMessage(chatId, 'You have chosen to continue as a job seeker.');
+  } else if (data === 'recruiter_individual') {
+    try {
+      await db.collection('users').doc(chatId.toString()).update({
+        userType: 'recruiter',
+        recruiterType: 'individual'
+      });
+      bot.sendMessage(chatId, 'You are now registered as an **individual recruiter**🥷. 🚀 It is time to schedule your first meeting!\n\nType **/meeting @username {meeting description}** where {username} is the telegram username of the Job seeker and {meeting description} is any meeting details you want to provide.\n\nIf you want to switch back to **Job Seeker** role just type */setjobseeker*.', { parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error('Error setting recruiter role:', error);
+      bot.sendMessage(chatId, '🛠 There was an error updating your role. Please try again.');
+    }
+  } else if (data === 'recruiter_company') {
+    bot.sendMessage(chatId, 'Please enter your *company name* using the format: */company {company name}*', { parse_mode: 'Markdown' });
   }
 });
 
