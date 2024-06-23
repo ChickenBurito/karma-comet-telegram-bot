@@ -169,6 +169,13 @@ const askForTimeZone = (chatId) => {
   });
 };
 
+// Helper function to check if the user exists
+const getUser = async (chatId) => {
+  const userRef = db.collection('users').doc(chatId.toString());
+  const userDoc = await userRef.get();
+  return userDoc.exists ? userDoc.data() : null;
+};
+
 //------------- Handle /start command --------------//
 bot.onText(/\/start/, (msg) => {
   console.log('/start command received');
@@ -362,14 +369,13 @@ bot.onText(/\/setjobseeker/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
-    const userRef = db.collection('users').doc(chatId.toString());
-    const user = await userRef.get();
+    const user = await getUser(chatId);
 
-    if (user.exists) {
-      if (user.data().userType === 'jobSeeker') {
+    if (user) {
+      if (user.userType === 'jobSeeker') {
         bot.sendMessage(chatId, "🙌 You are already a job seeker.");
       } else {
-        await userRef.update({
+        await db.collection('users').doc(chatId.toString()).update({
           userType: 'jobSeeker'
         });
 
@@ -705,13 +711,14 @@ bot.on('callback_query', async (callbackQuery) => {
         await requestRef.update({ request_submitted: true });
 
         // Send meeting request to counterpart
-        await bot.sendMessage(counterpart_id, `📬 You have a meeting request from *@${recruiter_name}: ${description}*.\n*Meeting duration:* ${meeting_duration}.\n\n📎 Please choose one of the available time slots:`, {
+        await bot.sendMessage(counterpart_id, `📬 You have a meeting request from *@${recruiter_name}*\n*Description:* ${description}.\n*Meeting duration:* ${meeting_duration}.\n\n📎 Please choose one of the available time slots:`, {
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: timeslots.map(slot => [
               { text: `📌 ${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
             ]).concat([[{ text: '✖ Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
-        }, { parse_mode: 'Markdown' });
+        });
 
         bot.sendMessage(recruiter_id, `✅ Meeting request sent to @${counterpart_name}.`);
       } else {
@@ -928,11 +935,9 @@ bot.onText(/\/userinfo/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
-    const userRef = db.collection('users').doc(chatId.toString());
-    const userDoc = await userRef.get();
+    const userData = await getUser(chatId);
 
-    if (userDoc.exists) {
-      const userData = userDoc.data();
+    if (userData) {
       const userTimeZone = userData.timeZone || 'UTC';
       const registeredAt = moment.tz(userData.registered_at, userTimeZone).format('YYYY-MM-DD HH:mm');
 
@@ -1424,11 +1429,10 @@ app.get('/subscription-status', async (req, res) => {
 bot.onText(/\/subscribe/, async (msg) => {
   console.log('/subscribe command received');
   const chatId = msg.chat.id;
-  const userRef = db.collection('users').doc(chatId.toString());
-  const user = await userRef.get();
+  const user = await getUser(chatId);
 
-  if (user.exists) {
-    if (user.data().userType !== 'recruiter') {
+  if (user) {
+    if (user.userType !== 'recruiter') {
       bot.sendMessage(chatId, '❗ Only recruiters need to subscribe.\n\nPlease update your role using /setrecruiter if you are a recruiter.');
       return;
     }
@@ -1455,10 +1459,9 @@ bot.onText(/\/subscribe/, async (msg) => {
 // Handle button presses for subscription options
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
-  const userRef = db.collection('users').doc(chatId.toString());
-  const user = await userRef.get();
-  
-  if (!user.exists) {
+  const user = await getUser(chatId);
+
+  if (!user) {
     bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
     return;
   }
@@ -1469,7 +1472,7 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (callbackQuery.data === 'subscribe_monthly') {
     priceId = 'price_1PT87KP9AlrL3WaNK4UsnChE';
   } else if (callbackQuery.data === 'unsubscribe') {
-    const stripeCustomerId = user.data().stripeCustomerId;
+    const stripeCustomerId = user.stripeCustomerId;
 
     if (!stripeCustomerId) {
       bot.sendMessage(chatId, '🤷 You do not have an active subscription to unsubscribe from.');
@@ -1478,14 +1481,14 @@ bot.on('callback_query', async (callbackQuery) => {
 
     try {
       await handleUnsubscribe(stripeCustomerId);
-      await userRef.update({
+      await db.collection('users').doc(chatId.toString()).update({
         'subscription.status': 'canceled',
         'subscription.expiry': null
       });
       bot.sendMessage(chatId, '😿 Your subscription has been canceled.');
     } catch (error) {
       console.error('Error during unsubscription:', error);
-      bot.sendMessage(chatId, '🛠 There was an error processing your unsubscription | Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error processing your unsubscription. Please try again.');
     }
     return;
   }
