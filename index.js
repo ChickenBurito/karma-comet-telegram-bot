@@ -501,7 +501,7 @@ bot.onText(/\/directmessage (\d+) (.+)/, async (msg, match) => {
 });
 
 ////**********************************************************////
-//++// Handle meeting and fedback requests and commitments //++//
+//++// Handle meeting and feedback requests and commitments //++//
 ////********************************************************////
 
 //------------------ Handle /meeting command --------------------//
@@ -821,7 +821,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
             if (commitment.exists) {
               const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
-              const feedbackDueDate = moment().add(2.5, 'hours').toISOString();
+              const feedbackCreatedAt = new Date().toISOString();
 
               await db.collection('feedbackRequests').doc(feedbackRequestId).set({
                 feedback_request_id: feedbackRequestId,
@@ -829,15 +829,26 @@ bot.on('callback_query', async (callbackQuery) => {
                 recruiter_name: request.data().recruiter_name,
                 counterpart_id: counterpart_id,
                 counterpart_name: request.data().counterpart_name,
-                feedback_request_created_at: new Date().toISOString(),
-                feedback_due_date: feedbackDueDate,
+                feedback_request_created_at: feedbackCreatedAt,
                 meeting_request_id: meetingRequestId,
                 meeting_commitment_id: meetingCommitmentId,
-                feedback_planned_at: null,
+                days_to_feedback: null,
+                feedback_scheduled_at: null,
                 feedback_submitted: false
               });
 
-              bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}" using the format: */feedbackdays {number_of_days}*`, { parse_mode: 'Markdown' });
+              const daysOpts = {
+                reply_markup: {
+                  inline_keyboard: [
+                    ...[1, 2, 3, 4, 5, 6, 7].map(days => [
+                      { text: `${days} day${days > 1 ? 's' : ''}`, callback_data: `set_feedback_days_${feedbackRequestId}_${days}` }
+                    ]),
+                    [{ text: '✖ Cancel', callback_data: `cancel_feedback_${feedbackRequestId}` }]
+                  ]
+                }
+              };
+
+              bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, daysOpts);
             }
           }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
           
@@ -894,37 +905,90 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error declining meeting request:', error);
       bot.sendMessage(chatId, '🛠 There was an error declining the meeting request. Please try again.');
     }
-  } else if (data[0] === 'approve' && data[1] === 'feedback') {
-    const feedbackRequestId = data[2];
-    const feedbackDueDate = data[3];
+  } else if (data[0] === 'set' && data[1] === 'feedback' && data[2] === 'days') {
+    const feedbackRequestId = data[3];
+    const daysToFeedback = parseInt(data[4], 10);
 
     try {
       const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
       const feedbackRequest = await feedbackRequestRef.get();
 
       if (feedbackRequest.exists) {
-        const { counterpart_id, recruiter_name, counterpart_name, meeting_request_id, meeting_commitment_id } = feedbackRequest.data();
+        const feedbackCreatedAt = feedbackRequest.data().feedback_request_created_at;
+        const feedbackScheduledAt = moment(feedbackCreatedAt).add(daysToFeedback, 'days').toISOString();
 
-        await feedbackRequestRef.update({ feedback_planned_at: feedbackDueDate, feedback_submitted: true });
+        await feedbackRequestRef.update({ days_to_feedback: daysToFeedback, feedback_scheduled_at: feedbackScheduledAt });
 
-        //--------------- Create feedback commitment -----------------//
+        // Send feedback request to job seeker
+        await bot.sendMessage(feedbackRequest.data().counterpart_id, `📬 You have a feedback request from *@${feedbackRequest.data().recruiter_name}*\n*Description:* ${feedbackRequest.data().description}.\n*Feedback due in:* ${daysToFeedback} day(s).\n\n📎 Please approve or decline the feedback request:`, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '✅ Approve', callback_data: `approve_feedback_${feedbackRequestId}` }],
+              [{ text: '✖ Decline', callback_data: `decline_feedback_${feedbackRequestId}` }]
+            ]
+          }
+        });
+
+        bot.sendMessage(feedbackRequest.data().recruiter_id, `✅ Feedback request sent to @${feedbackRequest.data().counterpart_name}.`);
+      } else {
+        bot.sendMessage(feedbackRequest.data().recruiter_id, '🤷 Feedback request not found.');
+      }
+    } catch (error) {
+      console.error('Error setting feedback days:', error);
+      bot.sendMessage(chatId, '🛠 There was an error setting feedback days. Please try again.');
+    }
+  } else if (data[0] === 'cancel' && data[1] === 'feedback') {
+    const feedbackRequestId = data[2];
+
+    try {
+      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+      const feedbackRequest = await feedbackRequestRef.get();
+
+      if (feedbackRequest.exists) {
+        await feedbackRequestRef.delete();
+
+        const { recruiter_id, counterpart_id } = feedbackRequest.data();
+
+        bot.sendMessage(recruiter_id, '⭕ Your feedback request was cancelled.');
+        bot.sendMessage(counterpart_id, '⭕ The feedback request was cancelled.');
+      } else {
+        bot.sendMessage(chatId, '🤷 Feedback request not found.');
+      }
+    } catch (error) {
+      console.error('Error cancelling feedback request:', error);
+      bot.sendMessage(chatId, '🛠 There was an error cancelling the feedback request. Please try again.');
+    }
+  } else if (data[0] === 'approve' && data[1] === 'feedback') {
+    const feedbackRequestId = data[2];
+
+    try {
+      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+      const feedbackRequest = await feedbackRequestRef.get();
+
+      if (feedbackRequest.exists) {
+        const { recruiter_id, counterpart_id, recruiter_name, counterpart_name, meeting_request_id, meeting_commitment_id, feedback_scheduled_at } = feedbackRequest.data();
+
+        await feedbackRequestRef.update({ feedback_submitted: true });
+
+        // Create feedback commitment
         const feedbackCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
         await db.collection('feedbackCommitments').doc(feedbackCommitmentId).set({
           feedback_commitment_id: feedbackCommitmentId,
           feedback_request_id: feedbackRequestId,
-          recruiter_id: feedbackRequest.data().recruiter_id,
+          recruiter_id: recruiter_id,
           recruiter_name: recruiter_name,
           counterpart_id: counterpart_id,
           counterpart_name: counterpart_name,
           meeting_request_id: meeting_request_id,
           meeting_commitment_id: meeting_commitment_id,
-          feedback_planned_at: feedbackDueDate,
+          feedback_scheduled_at: feedback_scheduled_at,
           recruiter_commitment_state: 'pending_feedback',
           counterpart_commitment_state: 'pending_feedback'
         });
 
-        bot.sendMessage(counterpart_id, `📝 The recruiter will provide feedback by ${new Date(feedbackDueDate).toLocaleString()}.`);
-        bot.sendMessage(chatId, '✅ Feedback request approved.');
+        bot.sendMessage(recruiter_id, `📝 The feedback commitment has been created and is due on ${new Date(feedback_scheduled_at).toLocaleString()}.`);
+        bot.sendMessage(counterpart_id, '✅ Feedback request approved.');
       } else {
         bot.sendMessage(chatId, '🤷 Feedback request not found.');
       }
@@ -949,7 +1013,7 @@ bot.on('callback_query', async (callbackQuery) => {
       }
     } catch (error) {
       console.error('Error declining feedback request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error declining the feedback request | Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error declining the feedback request. Please try again.');
     }
   }
 });
