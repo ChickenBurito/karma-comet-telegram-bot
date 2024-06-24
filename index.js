@@ -592,19 +592,19 @@ bot.on('callback_query', async (callbackQuery) => {
 
     let durationInMinutes;
     switch (durationText) {
-      case '🕓 30 minutes':
+      case '30 minutes':
         durationInMinutes = 30;
         break;
-      case '🕓 45 minutes':
+      case '45 minutes':
         durationInMinutes = 45;
         break;
-      case '🕓 1 hour':
+      case '1 hour':
         durationInMinutes = 60;
         break;
-      case '🕓 1.5 hours':
+      case '1.5 hours':
         durationInMinutes = 90;
         break;
-      case '🕓 2 hours':
+      case '2 hours':
         durationInMinutes = 120;
         break;
       default:
@@ -778,7 +778,8 @@ bot.on('callback_query', async (callbackQuery) => {
             description: request.data().description,
             recruiter_commitment_state: 'pending_meeting',
             counterpart_commitment_state: 'pending_meeting',
-            meeting_duration: meeting_duration // Include meeting duration
+            meeting_duration: meeting_duration, // Include meeting duration
+            duration_in_minutes: duration_in_minutes // Include duration in minutes
           });
 
           // Notify both parties
