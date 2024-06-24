@@ -17,6 +17,7 @@
     "firebase-admin": "^12.1.1",
     "git-filter-repo": "^0.0.30",
     "moment-timezone": "^0.5.45",
+    "node-cron": "^3.0.3",
     "node-schedule": "^2.1.1",
     "node-telegram-bot-api": "^0.66.0",
     "stripe": "^15.8.0"

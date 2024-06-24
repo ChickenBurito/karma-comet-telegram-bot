@@ -10,7 +10,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 const schedule = require('node-schedule');
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const moment = require('moment-timezone');
+const cron = require('node-cron'); //cron is used for scheduling tasks
+const moment = require('moment-timezone'); //sync users within different time-zones
 moment.tz.load(require('moment-timezone/data/packed/latest.json'));
 
 // Check required environment variables
@@ -1165,7 +1166,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
   }
 });
 
-//------------- Handle /feedbackstatus command ---------------//
+//------------------- Handle /feedbackstatus command ---------------//
 bot.onText(/\/feedbackstatus/, async (msg) => {
   console.log('/feedbackstatus command received');
   const chatId = msg.chat.id;
@@ -1205,7 +1206,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
         responseMessage += `🗳 *Feedback #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${feedback.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${feedback.recruiter_name}\n`;
-        responseMessage += `   *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Feedback Scheduled At:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
@@ -1258,7 +1259,7 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
         responseMessage += `🗳 *Feedback #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${feedback.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${feedback.recruiter_name}\n`;
-        responseMessage += `   *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Feedback Scheduled At:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
@@ -1274,6 +1275,43 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
 ////***************************************////
 // Commitment status updates and scoring logic
 ////**************************************////
+
+// Function to prompt users to update commitment status
+async function promptUpdateCommitmentStatus(commitmentId, description, userId, userType) {
+  const opts = {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '✅ Attended', callback_data: `status_${commitmentId}_attended` },
+          { text: '🚫 Missed', callback_data: `status_${commitmentId}_missed` }
+        ]
+      ]
+    }
+  };
+
+  bot.sendMessage(userId, `🔔 Please update your attendance status for the ${userType} commitment "${description}":`, opts);
+}
+
+// Function to schedule meeting commitment status prompt
+function scheduleMeetingCommitmentPrompt(meetingEndTime, commitmentId, description, recruiterId, jobSeekerId) {
+  const promptTime = moment(meetingEndTime).add(30, 'minutes').toDate();
+
+  cron.schedule(promptTime, () => {
+    console.log(`Prompting users to update status for meeting commitment ${commitmentId}`);
+    promptUpdateCommitmentStatus(commitmentId, description, recruiterId, 'meeting');
+    promptUpdateCommitmentStatus(commitmentId, description, jobSeekerId, 'meeting');
+  });
+}
+
+// Function to schedule feedback commitment status prompt
+function scheduleFeedbackCommitmentPrompt(feedbackScheduledAt, commitmentId, description, jobSeekerId) {
+  const promptTime = moment(feedbackScheduledAt).add(30, 'minutes').toDate();
+
+  cron.schedule(promptTime, () => {
+    console.log(`Prompting job seeker to update status for feedback commitment ${commitmentId}`);
+    promptUpdateCommitmentStatus(commitmentId, description, jobSeekerId, 'feedback');
+  });
+}
 
 // Handle button callbacks for commitment status
 bot.on('callback_query', async (callbackQuery) => {
@@ -1301,12 +1339,10 @@ bot.on('callback_query', async (callbackQuery) => {
 
           await userRef.update({ score: newScore });
 
-          // Retrieve the user's time zone from the database
-          const userTimeZone = user.data().timeZone || 'UTC'
+          const userTimeZone = user.data().timeZone || 'UTC';
 
-          bot.sendMessage(chatId, `Your status for meeting commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new score is *${newScore}*.`, { parse_mode: 'Markdown' });
+          bot.sendMessage(chatId, `Your status for ${commitment.data().type} commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new score is *${newScore}*.`, { parse_mode: 'Markdown' });
 
-          // Ask the counterpart to update their attendance status
           const counterpartId = user.data().userType === 'recruiter' ? commitment.data().counterpart_id : commitment.data().recruiter_id;
           const opts = {
             reply_markup: {
@@ -1319,7 +1355,7 @@ bot.on('callback_query', async (callbackQuery) => {
             }
           };
 
-          bot.sendMessage(counterpartId, `🔔 Please update your attendance status for the meeting "${commitment.data().description}":`, opts);
+          bot.sendMessage(counterpartId, `🔔 Please update your attendance status for the ${commitment.data().type} commitment "${commitment.data().description}":`, opts);
         }
       } else {
         bot.sendMessage(chatId, '🤷 Commitment not found.');
@@ -1379,7 +1415,6 @@ bot.on('callback_query', async (callbackQuery) => {
           bot.sendMessage(counterpartId, `🔔 Update your commitment status for "${commitment.data().description}":`, opts);
           bot.sendMessage(chatId, `❗ Your commitment status for "${commitment.data().description}" has been updated to ${status}.`);
 
-          // Ask the counterpart to confirm if feedback was provided
           if (commitmentType === 'feedback') {
             const feedbackOpts = {
               reply_markup: {
@@ -1404,6 +1439,40 @@ bot.on('callback_query', async (callbackQuery) => {
     }
   }
 });
+
+// Schedule prompts for existing meeting commitments
+async function scheduleExistingMeetingCommitments() {
+  try {
+    const commitmentsRef = db.collection('commitments').where('type', '==', 'meeting');
+    const commitmentsSnapshot = await commitmentsRef.get();
+
+    commitmentsSnapshot.forEach(doc => {
+      const data = doc.data();
+      scheduleMeetingCommitmentPrompt(data.meeting_end_time, doc.id, data.description, data.recruiter_id, data.counterpart_id);
+    });
+  } catch (error) {
+    console.error('Error scheduling existing meeting commitments:', error);
+  }
+}
+
+// Schedule prompts for existing feedback commitments
+async function scheduleExistingFeedbackCommitments() {
+  try {
+    const commitmentsRef = db.collection('commitments').where('type', '==', 'feedback');
+    const commitmentsSnapshot = await commitmentsRef.get();
+
+    commitmentsSnapshot.forEach(doc => {
+      const data = doc.data();
+      scheduleFeedbackCommitmentPrompt(data.feedback_scheduled_at, doc.id, data.description, data.counterpart_id);
+    });
+  } catch (error) {
+    console.error('Error scheduling existing feedback commitments:', error);
+  }
+}
+
+// Call the functions to schedule prompts for existing commitments when the bot starts
+scheduleExistingMeetingCommitments();
+scheduleExistingFeedbackCommitments();
 
 ////*******************////
 /// Subscription logic ///
@@ -1672,7 +1741,7 @@ schedule.scheduleJob('0 0 * * *', async () => {
   });
 });
 
-/******************////
+/////******************////
 //  Send reminders logic
 ////******************////
 
