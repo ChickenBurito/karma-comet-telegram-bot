@@ -723,6 +723,18 @@ bot.on('callback_query', async (callbackQuery) => {
           return;
         }
 
+        // Get the counterpart's time zone
+        const counterpartRef = db.collection('users').doc(counterpart_id);
+        const counterpartDoc = await counterpartRef.get();
+        const counterpartTimeZone = counterpartDoc.data().timeZone || 'UTC';
+        
+        // Convert time slots to the counterpart's time zone
+        const convertedTimeslots = timeslots.map(slot => {
+          const [date, time] = slot.split(' ');
+          const dateTime = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', user.timeZone || 'UTC');
+          return dateTime.clone().tz(counterpartTimeZone).format('YYYY-MM-DD HH:mm');
+        });
+
         // Update request_submitted to true
         await requestRef.update({ request_submitted: true });
 
@@ -730,7 +742,7 @@ bot.on('callback_query', async (callbackQuery) => {
         await bot.sendMessage(counterpart_id, `📬 You have a meeting request from *@${recruiter_name}*\n*Description:* ${description}.\n*Meeting duration:* ${meeting_duration}.\n\n📎 Please choose one of the available time slots:`, {
           parse_mode: 'Markdown',
           reply_markup: {
-            inline_keyboard: timeslots.map(slot => [
+            inline_keyboard: convertedTimeslots.map(slot => [
               { text: `📌 ${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
             ]).concat([[{ text: '✖ Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
