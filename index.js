@@ -707,6 +707,12 @@ bot.on('callback_query', async (callbackQuery) => {
       if (request.exists) {
         const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name, meeting_duration, duration_in_minutes } = request.data();
 
+        // Validate that at least one date and one time slot are selected
+        if (timeslots.length === 0) {
+          bot.sendMessage(chatId, '❗ Please choose at least one date and one time slot before submitting the meeting request.');
+          return;
+        }
+
         // Update request_submitted to true
         await requestRef.update({ request_submitted: true });
 
@@ -1005,10 +1011,10 @@ bot.onText(/\/meetingstatus/, async (msg) => {
       let responseMessage = '📂 *Your Scheduled Meetings:*\n'; //Single line break \n
       upcomingMeetings.forEach((meeting, index) => {
         responseMessage += `🗳 *Meeting #${index + 1}*\n`;
-        responseMessage += `   💼 *Job Seeker Name:* ${meeting.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 *Recruiter Name:* ${meeting.recruiter_name}\n`;
-        responseMessage += `   📅 *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 *Description:* ${meeting.description}\n\n`; //Double line break \n\n - for better visibility
+        responseMessage += `   *Job Seeker Name:* ${meeting.counterpart_name}\n`;
+        responseMessage += `   *Recruiter Name:* ${meeting.recruiter_name}\n`;
+        responseMessage += `   *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Description:* ${meeting.description}\n\n`; //Double line break \n\n - for better visibility
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
@@ -1058,10 +1064,10 @@ bot.onText(/\/meetinghistory/, async (msg) => {
       let responseMessage = '🗄 *Your Meeting History:*\n';
       pastMeetings.forEach((meeting, index) => {
         responseMessage += `🗳 *Meeting #${index + 1}*\n`;
-        responseMessage += `   💼 *Job Seeker Name:* ${meeting.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 *Recruiter Name:* ${meeting.recruiter_name}\n`;
-        responseMessage += `   📅 *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 *Description:* ${meeting.description}\n\n`;
+        responseMessage += `   *Job Seeker Name:* ${meeting.counterpart_name}\n`;
+        responseMessage += `   *Recruiter Name:* ${meeting.recruiter_name}\n`;
+        responseMessage += `   *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Description:* ${meeting.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
@@ -1111,10 +1117,10 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
       let responseMessage = '🗓 *Your Scheduled Feedbacks:*\n';
       upcomingFeedbacks.forEach((feedback, index) => {
         responseMessage += `🗳 *Feedback #${index + 1}*\n`;
-        responseMessage += `   💼 *Job Seeker Name:* ${feedback.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 *Recruiter Name:* ${feedback.recruiter_name}\n`;
-        responseMessage += `   📅 *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 *Description:* ${feedback.description}\n\n`;
+        responseMessage += `   *Job Seeker Name:* ${feedback.counterpart_name}\n`;
+        responseMessage += `   *Recruiter Name:* ${feedback.recruiter_name}\n`;
+        responseMessage += `   *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Description:* ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
@@ -1164,10 +1170,10 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
       let responseMessage = '🗃 *Your Feedback History:*\n';
       pastFeedbacks.forEach((feedback, index) => {
         responseMessage += `🗳 *Feedback #${index + 1}*\n`;
-        responseMessage += `   💼 *Job Seeker Name:* ${feedback.counterpart_name}\n`;
-        responseMessage += `   👨‍💻 *Recruiter Name:* ${feedback.recruiter_name}\n`;
-        responseMessage += `   📅 *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
-        responseMessage += `   📋 *Description:* ${feedback.description}\n\n`;
+        responseMessage += `   *Job Seeker Name:* ${feedback.counterpart_name}\n`;
+        responseMessage += `   *Recruiter Name:* ${feedback.recruiter_name}\n`;
+        responseMessage += `   *Feedback Due Date:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Description:* ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
     } else {
