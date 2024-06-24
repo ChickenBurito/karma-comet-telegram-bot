@@ -511,6 +511,16 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   const [counterpartUsername, description] = match.slice(1);
 
   try {
+    // Check if the user is a recruiter
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists || userDoc.data().userType !== 'recruiter') {
+      bot.sendMessage(chatId, '❗ Only recruiters can create meetings. Please update your role using /setrecruiter if you are a recruiter.');
+      return;
+    }
+    
+    // Proceed with finding the counterpart only if the user is a recruiter
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
 
     if (!counterpartRef.empty) {
