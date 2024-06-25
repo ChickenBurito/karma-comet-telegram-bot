@@ -395,8 +395,6 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 
         bot.sendMessage(chatId, ' ✅ Your role has been updated to *job seeker*\n\nYour recruiter *subscription status remains unchanged* until expiration date.\nPlease note that in order to use recruiter role features you will need to switch back to *recruiter role*.', { parse_mode: 'Markdown' });
       }
-    } else {
-      bot.sendMessage(chatId, "🤷 User not found. Please register first using /register command.");
     }
   } catch (error) {
     console.error('Error setting job seeker role:', error);
@@ -1069,8 +1067,6 @@ bot.onText(/\/userinfo/, async (msg) => {
       responseMessage += `*Time Zone:* ${escapeMarkdown(userData.timeZone || 'UTC')}\n`;
 
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
-    } else {
-      bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
     }
   } catch (error) {
     console.error('Error handling /userinfo command:', error);
@@ -1636,8 +1632,6 @@ bot.onText(/\/subscribe/, async (msg) => {
       }
     };
     bot.sendMessage(chatId, '🧾 Please choose your subscription plan:', opts);
-  } else {
-    bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
   }
 });
 
