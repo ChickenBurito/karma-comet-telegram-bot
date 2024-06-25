@@ -778,8 +778,14 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes } = request.data();
+        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, counterpart_accepted } = request.data();
 
+        // Check if the meeting request has already been accepted
+        if (counterpart_accepted) {
+          bot.sendMessage(chatId, '⚠️ This meeting request has already been accepted.');
+          return;
+        }
+        
         // Ensure selectedTimeSlot is correctly defined
         if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
           // Update counterpart_accepted to true and add selected time slot
