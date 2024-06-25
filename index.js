@@ -730,12 +730,12 @@ bot.on('callback_query', async (callbackQuery) => {
         const counterpartRef = db.collection('users').doc(counterpart_id);
         const counterpartDoc = await counterpartRef.get();
         const counterpartTimeZone = counterpartDoc.data().timeZone || 'UTC';
-        
+
         // Convert time slots to the counterpart's time zone
         const convertedTimeslots = timeslots.map(slot => {
           const [date, time] = slot.split(' ');
-          const dateTime = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', user.timeZone || 'UTC');
-          return dateTime.clone().tz(counterpartTimeZone).format('YYYY-MM-DD HH:mm');
+          const dateTime = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', counterpartTimeZone);
+          return dateTime.format('YYYY-MM-DD HH:mm');
         });
 
         // Update request_submitted to true
@@ -746,18 +746,18 @@ bot.on('callback_query', async (callbackQuery) => {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: convertedTimeslots.map(slot => [
-              { text: `📌 ${slot.split(' ')[0]} ${slot.split(' ')[1]}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+              { text: `📌 ${slot}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
             ]).concat([[{ text: '✖ Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
           }
         });
 
-        bot.sendMessage(recruiter_id, `✅ Meeting request sent to @${counterpart_name}.`);
+        bot.sendMessage(chatId, `✅ Meeting request sent to @${counterpart_name}.`);
       } else {
-        bot.sendMessage(recruiter_id, '🤷 Meeting request not found.');
+        bot.sendMessage(chatId, '🤷 Meeting request not found.');
       }
     } catch (error) {
       console.error('Error submitting meeting request:', error);
-      bot.sendMessage(recruiter_id, '🛠 There was an error submitting the meeting request | Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error submitting the meeting request. Please try again.');
     }
   } else if (data[0] === 'cancel' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
