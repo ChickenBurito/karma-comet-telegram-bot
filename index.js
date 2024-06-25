@@ -111,6 +111,7 @@ const getUser = async (chatId) => {
 
 // Function to check if the user is registered
 const ensureUserRegistered = async (chatId) => {
+  console.log(`Checking registration for chat ID: ${chatId}`);
   const user = await getUser(chatId);
   if (!user) {
     bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
@@ -119,7 +120,7 @@ const ensureUserRegistered = async (chatId) => {
   return true;
 };
 
-  // Function to handle user registration
+// Function to handle user registration
 const registerUser = async (chatId, userName) => {
   try {
     const userRef = db.collection('users').doc(chatId.toString());
@@ -258,6 +259,7 @@ bot.on('callback_query', async (callbackQuery) => {
   if (data === 'register') {
     const userName = callbackQuery.from.username || 'User'; // Use callbackQuery.from.username
     await registerUser(chatId, userName);
+    return; // Early return to prevent further execution
   } else if (data.startsWith('timezone_')) {
     const timeZone = data.split('_')[1];
 
@@ -285,7 +287,13 @@ bot.on('callback_query', async (callbackQuery) => {
     } else {
       bot.sendMessage(chatId, '🙌 You have already set your time zone.');
     }
-  } else if (data === 'prompt_setrecruiter') {
+    return; // Early return to prevent further execution
+  }
+
+  // Ensure user is registered for all other actions
+  if (!(await ensureUserRegistered(chatId))) return;
+
+  if (data === 'prompt_setrecruiter') {
     const opts = {
       reply_markup: {
         inline_keyboard: [
@@ -309,6 +317,8 @@ const handleRecruiterType = async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
   const data = callbackQuery.data;
+
+  if (!(await ensureUserRegistered(chatId))) return;
 
   if (data === 'recruiter_individual') {
     try {
