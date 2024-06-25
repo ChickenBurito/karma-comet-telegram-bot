@@ -102,7 +102,25 @@ bot.setMyCommands(commands)
     console.error('Error setting bot commands:', err);
   });
 
-// Function to handle user registration
+// Helper function to check if the user exists
+const getUser = async (chatId) => {
+  const userRef = db.collection('users').doc(chatId.toString());
+  const userDoc = await userRef.get();
+  return userDoc.exists ? userDoc.data() : null;
+};
+
+// Middleware to check if the user is registered
+const ensureUserRegistered = async (msg, next) => {
+  const chatId = msg.chat.id;
+  const user = await getUser(chatId);
+  if (!user) {
+    bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
+    return;
+  }
+  next();
+};
+
+  // Function to handle user registration
 const registerUser = async (chatId, userName) => {
   try {
     const userRef = db.collection('users').doc(chatId.toString());
@@ -168,13 +186,6 @@ const askForTimeZone = (chatId) => {
       ]
     }
   });
-};
-
-// Helper function to check if the user exists
-const getUser = async (chatId) => {
-  const userRef = db.collection('users').doc(chatId.toString());
-  const userDoc = await userRef.get();
-  return userDoc.exists ? userDoc.data() : null;
 };
 
 //------------- Handle /start command --------------//
@@ -395,7 +406,7 @@ bot.onText(/\/setjobseeker/, async (msg) => {
 const resetAuthorizedUsers = ['klngnv','kriskolgan']; // Add your username or user ID here
 
 //----------- Handle /reset command for testing purposes -----------//
-bot.onText(/\/reset/, async (msg) => {
+bot.onText(/\/reset/, ensureUserRegistered, async (msg) => {
   console.log('/reset command received');
   const chatId = msg.chat.id;
   const userName = msg.from.username || 'User';
@@ -506,7 +517,7 @@ bot.onText(/\/directmessage (\d+) (.+)/, async (msg, match) => {
 ////********************************************************////
 
 //------------------ Handle /meeting command --------------------//
-bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
+bot.onText(/\/meeting @(\w+) (.+)/, ensureUserRegistered, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
   const [counterpartUsername, description] = match.slice(1);
@@ -1024,7 +1035,7 @@ bot.on('callback_query', async (callbackQuery) => {
 ////************************************////
 
 //-------------- Handle /userinfo command ----------------//
-bot.onText(/\/userinfo/, async (msg) => {
+bot.onText(/\/userinfo/, ensureUserRegistered, async (msg) => {
   console.log('/userinfo command received');
   const chatId = msg.chat.id;
 
@@ -1061,7 +1072,7 @@ bot.onText(/\/userinfo/, async (msg) => {
 });
 
 //----------------- Handle /meetingstatus command ----------------//
-bot.onText(/\/meetingstatus/, async (msg) => {
+bot.onText(/\/meetingstatus/, ensureUserRegistered, async (msg) => {
   console.log('/meetingstatus command received');
   const chatId = msg.chat.id;
 
@@ -1114,7 +1125,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
 });
 
 //------------------- Handle /meetinghistory command ------------------//
-bot.onText(/\/meetinghistory/, async (msg) => {
+bot.onText(/\/meetinghistory/, ensureUserRegistered, async (msg) => {
   console.log('/meetinghistory command received');
   const chatId = msg.chat.id;
 
@@ -1167,7 +1178,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
 });
 
 //------------------- Handle /feedbackstatus command ---------------//
-bot.onText(/\/feedbackstatus/, async (msg) => {
+bot.onText(/\/feedbackstatus/, ensureUserRegistered, async (msg) => {
   console.log('/feedbackstatus command received');
   const chatId = msg.chat.id;
 
@@ -1220,7 +1231,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
 });
 
 //--------------- Handle /feedbackhistory command ---------------//
-bot.onText(/\/feedbackhistory/, async (msg) => {
+bot.onText(/\/feedbackhistory/, ensureUserRegistered, async (msg) => {
   console.log('/feedbackhistory command received');
   const chatId = msg.chat.id;
 
@@ -1314,7 +1325,7 @@ function scheduleFeedbackCommitmentPrompt(feedbackScheduledAt, commitmentId, des
 }
 
 // Handle button callbacks for commitment status
-bot.on('callback_query', async (callbackQuery) => {
+bot.on('callback_query', ensureUserRegistered, async (callbackQuery) => {
   const msg = callbackQuery.message;
   const [action, commitmentId, status] = callbackQuery.data.split('_');
 
@@ -1619,14 +1630,9 @@ bot.onText(/\/subscribe/, async (msg) => {
 });
 
 // Handle button presses for subscription options
-bot.on('callback_query', async (callbackQuery) => {
+bot.on('callback_query', ensureUserRegistered, async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const user = await getUser(chatId);
-
-  if (!user) {
-    bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
-    return;
-  }
 
   let priceId;
   if (callbackQuery.data === 'subscribe_yearly') {
