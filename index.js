@@ -765,40 +765,34 @@ bot.on('callback_query', async (callbackQuery) => {
         const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone } = request.data();
 
         // Ensure selectedTimeSlot is correctly defined
-        if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
-          // Update counterpart_accepted to true and add selected time slot
-          await requestRef.update({
-            counterpart_accepted: true,
-            selected_time_slot: selectedTimeSlot
-          });
+      if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
+        // Convert selected time slot to recruiter's time zone and then to UTC
+        const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone);
+        const convertedMeetingStartTime = meetingStartTime.clone().tz('UTC').format('YYYY-MM-DD HH:mm');
+        const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
 
-          // Convert selected time slot to recruiter's time zone
-          const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone);
-          const convertedMeetingStartTimeUTC = meetingStartTime.clone().tz('UTC').format('YYYY-MM-DD HH:mm');
-          const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
-          
-          //------------------ Create a meeting commitment -------------------//
-          const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
-          await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
-            recruiter_name: request.data().recruiter_name,
-            recruiter_company_name: request.data().recruiter_company_name,
-            recruiter_id: request.data().recruiter_id,
-            counterpart_id: request.data().counterpart_id,
-            counterpart_name: request.data().counterpart_name,
-            meeting_request_id: meetingRequestId,
-            meeting_commitment_id: meetingCommitmentId,
-            created_at: request.data().created_at,
-            accepted_at: new Date().toISOString(),
-            meeting_scheduled_at: convertedMeetingStartTimeUTC,
-            meeting_end_time: meetingEndTime,
-            description: request.data().description,
-            recruiter_commitment_state: 'pending_meeting',
-            counterpart_commitment_state: 'pending_meeting',
-            meeting_duration: meeting_duration, // Include meeting duration
-            duration_in_minutes: duration_in_minutes, // Include duration in minutes
-            user_time_zone: request.data().user_time_zone,
-            counterpart_time_zone: request.data().counterpart_time_zone
-          });          
+        //------------------ Create a meeting commitment -------------------//
+        const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
+        await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
+          recruiter_name: request.data().recruiter_name,
+          recruiter_company_name: request.data().recruiter_company_name,
+          recruiter_id: request.data().recruiter_id,
+          counterpart_id: request.data().counterpart_id,
+          counterpart_name: request.data().counterpart_name,
+          meeting_request_id: meetingRequestId,
+          meeting_commitment_id: meetingCommitmentId,
+          created_at: request.data().created_at,
+          accepted_at: new Date().toISOString(),
+          meeting_scheduled_at: convertedMeetingStartTime,
+          meeting_end_time: meetingEndTime,
+          description: request.data().description,
+          recruiter_commitment_state: 'pending_meeting',
+          counterpart_commitment_state: 'pending_meeting',
+          meeting_duration: meeting_duration, // Include meeting duration
+          duration_in_minutes: duration_in_minutes, // Include duration in minutes
+          user_time_zone: user_time_zone,
+          counterpart_time_zone: counterpart_time_zone
+        });         
 
           // Notify both parties
           bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${convertedMeetingStartTime}.`);
