@@ -836,7 +836,7 @@ bot.on('callback_query', async (callbackQuery) => {
                 }
               };
 
-              bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, daysOpts);
+              bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, { parse_mode: 'Markdown' }, daysOpts);
             }
           }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
           
@@ -1074,7 +1074,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
       console.log(`Recruiter meeting data: ${JSON.stringify(data)}`);
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
       if (meetingTime.isAfter(now)) {
-        upcomingMeetings.push(data);
+        upcomingMeetings.push({ ...data, meetingTime });
       }
     });
 
@@ -1083,11 +1083,11 @@ bot.onText(/\/meetingstatus/, async (msg) => {
       console.log(`Job Seeker meeting data: ${JSON.stringify(data)}`);
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
       if (meetingTime.isAfter(now)) {
-        upcomingMeetings.push(data);
+        upcomingMeetings.push({ ...data, meetingTime });
       }
     });
 
-    upcomingMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
+    upcomingMeetings.sort((a, b) => a.meetingTime - b.meetingTime);
 
     if (upcomingMeetings.length > 0) {
       let responseMessage = '📂 *Your Scheduled Meetings:*\n'; //Single line break \n
@@ -1095,7 +1095,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
         responseMessage += `🗳 *Meeting #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${meeting.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${meeting.recruiter_name}\n`;
-        responseMessage += `   *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Meeting Scheduled Time:* ${meeting.meetingTime.format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${meeting.description}\n\n`; //Double line break \n\n - for better visibility
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
