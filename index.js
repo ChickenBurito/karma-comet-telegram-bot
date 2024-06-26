@@ -785,7 +785,7 @@ bot.on('callback_query', async (callbackQuery) => {
           bot.sendMessage(chatId, '⚠️ This meeting request has already been accepted.');
           return;
         }
-        
+
         // Ensure selectedTimeSlot is correctly defined
         if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
           // Update counterpart_accepted to true and add selected time slot
@@ -1074,8 +1074,13 @@ bot.onText(/\/meetingstatus/, async (msg) => {
   try {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
+      return;
+    }
     const userTimeZone = userDoc.data().timeZone || 'UTC';
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
+    console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
     const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
     const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
@@ -1085,6 +1090,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     recruiterMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      console.log(`Meeting status: Recruiter meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isAfter(now)) {
         upcomingMeetings.push(data);
       }
@@ -1093,6 +1099,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     jobSeekerMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      console.log(`Meeting status: Job Seeker meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isAfter(now)) {
         upcomingMeetings.push(data);
       }
@@ -1127,8 +1134,13 @@ bot.onText(/\/meetinghistory/, async (msg) => {
   try {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
+      return;
+    }
     const userTimeZone = userDoc.data().timeZone || 'UTC';
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
+    console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
     const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
     const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
@@ -1138,6 +1150,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     recruiterMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      console.log(`Recruiter meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isBefore(now)) {
         pastMeetings.push(data);
       }
@@ -1146,6 +1159,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     jobSeekerMeetings.forEach(doc => {
       const data = doc.data();
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      console.log(`Job Seeker meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isBefore(now)) {
         pastMeetings.push(data);
       }
