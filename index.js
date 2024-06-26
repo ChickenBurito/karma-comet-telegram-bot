@@ -531,14 +531,14 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
       const counterpartId = counterpart.id;
       const counterpartTimeZone = counterpart.data().timeZone || 'UTC';
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
-
+    
       const userTimeZone = userDoc.data().timeZone || 'UTC';
       const recruiterCompanyName = msg.from.company_name || '';
       const recruiterName = msg.from.username;
-
+    
       // Generate a unique meeting request ID
       const meetingRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
-
+    
       //------------ Store the meeting request in Firestore -----------//
       await db.collection('meetingRequests').doc(meetingRequestId).set({
         recruiter_name: recruiterName,
@@ -556,7 +556,7 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         user_time_zone: userTimeZone,
         counterpart_time_zone: counterpartTimeZone
       });
-      console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
+      console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);    
 
       // Ask user to choose meeting duration
       const durations = ['30 minutes', '45 minutes', '1 hour', '1.5 hours', '2 hours'];
@@ -774,9 +774,9 @@ bot.on('callback_query', async (callbackQuery) => {
 
           // Convert selected time slot to recruiter's time zone
           const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone);
-          const convertedMeetingStartTime = meetingStartTime.clone().tz(user_time_zone).format('YYYY-MM-DD HH:mm');
+          const convertedMeetingStartTimeUTC = meetingStartTime.clone().tz('UTC').format('YYYY-MM-DD HH:mm');
           const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
-
+          
           //------------------ Create a meeting commitment -------------------//
           const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
           await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
@@ -789,14 +789,16 @@ bot.on('callback_query', async (callbackQuery) => {
             meeting_commitment_id: meetingCommitmentId,
             created_at: request.data().created_at,
             accepted_at: new Date().toISOString(),
-            meeting_scheduled_at: convertedMeetingStartTime,
+            meeting_scheduled_at: convertedMeetingStartTimeUTC,
             meeting_end_time: meetingEndTime,
             description: request.data().description,
             recruiter_commitment_state: 'pending_meeting',
             counterpart_commitment_state: 'pending_meeting',
             meeting_duration: meeting_duration, // Include meeting duration
-            duration_in_minutes: duration_in_minutes // Include duration in minutes
-          });
+            duration_in_minutes: duration_in_minutes, // Include duration in minutes
+            user_time_zone: request.data().user_time_zone,
+            counterpart_time_zone: request.data().counterpart_time_zone
+          });          
 
           // Notify both parties
           bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${convertedMeetingStartTime}.`);
@@ -1072,7 +1074,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     recruiterMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
       console.log(`Recruiter meeting data: ${JSON.stringify(data)}`);
-      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      const meetingTime = moment.tz(data.meeting_scheduled_at, 'UTC').tz(userTimeZone);
       if (meetingTime.isAfter(now)) {
         upcomingMeetings.push({ ...data, meetingTime });
       }
@@ -1081,7 +1083,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     jobSeekerMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
       console.log(`Job Seeker meeting data: ${JSON.stringify(data)}`);
-      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      const meetingTime = moment.tz(data.meeting_scheduled_at, 'UTC').tz(userTimeZone);
       if (meetingTime.isAfter(now)) {
         upcomingMeetings.push({ ...data, meetingTime });
       }
@@ -1092,11 +1094,10 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     if (upcomingMeetings.length > 0) {
       let responseMessage = '📂 *Your Scheduled Meetings:*\n'; //Single line break \n
       upcomingMeetings.forEach((meeting, index) => {
-        const meetingTimeInUserTimeZone = moment.tz(meeting.meeting_scheduled_at, userTimeZone);
         responseMessage += `🗳 *Meeting #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${meeting.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${meeting.recruiter_name}\n`;
-        responseMessage += `   *Meeting Scheduled Time:* ${meetingTimeInUserTimeZone.format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Meeting Scheduled Time:* ${meeting.meetingTime.format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${meeting.description}\n\n`; //Double line break \n\n - for better visibility
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
