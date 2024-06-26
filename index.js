@@ -818,6 +818,7 @@ bot.on('callback_query', async (callbackQuery) => {
             meeting_duration: meeting_duration, // Include meeting duration
             duration_in_minutes: duration_in_minutes // Include duration in minutes
           });
+          console.log(`Meeting commitment stored in Firestore for meeting commitment ID: ${meetingCommitmentId} with counterpart_id: ${request.data().counterpart_id}`);
 
           // Notify both parties
           bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${selectedTimeSlot}.`);
@@ -1083,7 +1084,7 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
     const recruiterMeetingsSnapshot = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
-    const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+    const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId.toString()).get(); // Ensure chatId is a string
 
     console.log(`Number of recruiter meetings fetched: ${recruiterMeetingsSnapshot.size}`);
     console.log(`Number of job seeker meetings fetched: ${jobSeekerMeetingsSnapshot.size}`);
@@ -1146,7 +1147,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
     const recruiterMeetingsSnapshot = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
-    const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+    const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId.toString()).get(); // Ensure chatId is a string
 
     console.log(`Number of recruiter meetings fetched: ${recruiterMeetingsSnapshot.size}`);
     console.log(`Number of job seeker meetings fetched: ${jobSeekerMeetingsSnapshot.size}`);
