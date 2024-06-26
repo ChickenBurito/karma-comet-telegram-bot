@@ -1082,24 +1082,24 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
     console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
-    const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
-    const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+    const recruiterMeetingsSnapshot = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
     const upcomingMeetings = [];
 
-    recruiterMeetings.forEach(doc => {
+    recruiterMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
+      console.log(`Recruiter meeting data: ${JSON.stringify(data)}`);
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      console.log(`Meeting status: Recruiter meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isAfter(now)) {
         upcomingMeetings.push(data);
       }
     });
 
-    jobSeekerMeetings.forEach(doc => {
+    jobSeekerMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
+      console.log(`Job Seeker meeting data: ${JSON.stringify(data)}`);
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      console.log(`Meeting status: Job Seeker meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isAfter(now)) {
         upcomingMeetings.push(data);
       }
@@ -1142,24 +1142,24 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
     console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
-    const recruiterMeetings = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
-    const jobSeekerMeetings = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+    const recruiterMeetingsSnapshot = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
     const pastMeetings = [];
 
-    recruiterMeetings.forEach(doc => {
+    recruiterMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
+      console.log(`Recruiter meeting data: ${JSON.stringify(data)}`);
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      console.log(`Recruiter meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isBefore(now)) {
         pastMeetings.push(data);
       }
     });
 
-    jobSeekerMeetings.forEach(doc => {
+    jobSeekerMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
+      console.log(`Job Seeker meeting data: ${JSON.stringify(data)}`);
       const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
-      console.log(`Job Seeker meeting scheduled at: ${meetingTime.format('YYYY-MM-DD HH:mm:ss')}`);
       if (meetingTime.isBefore(now)) {
         pastMeetings.push(data);
       }
