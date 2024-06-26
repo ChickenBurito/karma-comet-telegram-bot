@@ -1092,10 +1092,11 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     if (upcomingMeetings.length > 0) {
       let responseMessage = '📂 *Your Scheduled Meetings:*\n'; //Single line break \n
       upcomingMeetings.forEach((meeting, index) => {
+        const meetingTimeInUserTimeZone = moment.tz(meeting.meeting_scheduled_at, userTimeZone);
         responseMessage += `🗳 *Meeting #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${meeting.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${meeting.recruiter_name}\n`;
-        responseMessage += `   *Meeting Scheduled Time:* ${meeting.meetingTime.format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Meeting Scheduled Time:* ${meetingTimeInUserTimeZone.format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${meeting.description}\n\n`; //Double line break \n\n - for better visibility
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
