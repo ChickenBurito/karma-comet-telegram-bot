@@ -517,34 +517,22 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
     // Check if the user is a recruiter
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
-    
+
     if (!userDoc.exists || userDoc.data().userType !== 'recruiter') {
       bot.sendMessage(chatId, '❗ Only recruiters can create meetings. Please update your role using /setrecruiter if you are a recruiter.');
       return;
     }
-    
+
     // Proceed with finding the counterpart only if the user is a recruiter
     const counterpartRef = await db.collection('users').where('name', '==', counterpartUsername).get();
 
     if (!counterpartRef.empty) {
       const counterpart = counterpartRef.docs[0];
       const counterpartId = counterpart.id;
+      const counterpartTimeZone = counterpart.data().timeZone || 'UTC';
       console.log(`Counterpart found: ${counterpartUsername} with ID: ${counterpartId}`);
 
-      const userRef = db.collection('users').doc(chatId.toString());
-      const userDoc = await userRef.get();
-      
-      if (userDoc.exists && userDoc.data().userType === 'recruiter') {
-        const user = userDoc.data();
-        const now = new Date();
-        const expiryDate = new Date(user.subscription.expiry);
-
-        if (user.subscription.status === 'expired' || (user.subscription.status === 'trial' && now >= expiryDate)) {
-          bot.sendMessage(chatId, '👾 Your subscription has *expired*!\n\nPlease *subscribe** to continue using the service.', { parse_mode: 'Markdown' });
-          return;
-        }
-      }
-
+      const userTimeZone = userDoc.data().timeZone || 'UTC';
       const recruiterCompanyName = msg.from.company_name || '';
       const recruiterName = msg.from.username;
 
@@ -564,7 +552,9 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
         description: description,
         request_submitted: false,
         counterpart_accepted: false,
-        meeting_duration: null // Initialize meeting duration
+        meeting_duration: null, // Initialize meeting duration
+        user_time_zone: userTimeZone,
+        counterpart_time_zone: counterpartTimeZone
       });
       console.log(`Meeting request stored in Firestore for meeting request ID: ${meetingRequestId} in chat ID: ${chatId}`);
 
@@ -718,7 +708,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name, meeting_duration, duration_in_minutes } = request.data();
+        const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone } = request.data();
 
         // Validate that at least one date and one time slot are selected
         if (timeslots.length === 0) {
@@ -726,16 +716,10 @@ bot.on('callback_query', async (callbackQuery) => {
           return;
         }
 
-        // Get the counterpart's time zone
-        const counterpartRef = db.collection('users').doc(counterpart_id);
-        const counterpartDoc = await counterpartRef.get();
-        const counterpartTimeZone = counterpartDoc.data().timeZone || 'UTC';
-
         // Convert time slots to the counterpart's time zone
         const convertedTimeslots = timeslots.map(slot => {
-          const [date, time] = slot.split(' ');
-          const dateTime = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', counterpartTimeZone);
-          return dateTime.format('YYYY-MM-DD HH:mm');
+          const dateTime = moment.tz(slot, 'YYYY-MM-DD HH:mm', user_time_zone);
+          return dateTime.clone().tz(counterpart_time_zone).format('YYYY-MM-DD HH:mm');
         });
 
         // Update request_submitted to true
@@ -757,14 +741,14 @@ bot.on('callback_query', async (callbackQuery) => {
       }
     } catch (error) {
       console.error('Error submitting meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error submitting the meeting request. Please try again.');
+      bot.sendMessage(chatId, '🛠 There was an error submitting the meeting request | Please try again.');
     }
   } else if (data[0] === 'cancel' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
 
     try {
       await db.collection('meetingRequests').doc(meetingRequestId).delete();
-      bot.sendMessage(chatId, '⭕ Meeting request cancelled by the Job Seeker.');
+      bot.sendMessage(chatId, '⭕ Meeting request cancelled.');
     } catch (error) {
       console.error('Error cancelling meeting request:', error);
       bot.sendMessage(chatId, '🛠 There was an error cancelling the meeting request | Please try again.');
@@ -778,13 +762,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const request = await requestRef.get();
 
       if (request.exists) {
-        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, counterpart_accepted } = request.data();
-
-        // Check if the meeting request has already been accepted
-        if (counterpart_accepted) {
-          bot.sendMessage(chatId, '⚠️ This meeting request has already been accepted.');
-          return;
-        }
+        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone } = request.data();
 
         // Ensure selectedTimeSlot is correctly defined
         if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
@@ -794,8 +772,9 @@ bot.on('callback_query', async (callbackQuery) => {
             selected_time_slot: selectedTimeSlot
           });
 
-          // Calculate end time
-          const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', request.data().timeZone);
+          // Convert selected time slot to recruiter's time zone
+          const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone);
+          const convertedMeetingStartTime = meetingStartTime.clone().tz(user_time_zone).format('YYYY-MM-DD HH:mm');
           const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
 
           //------------------ Create a meeting commitment -------------------//
@@ -810,7 +789,7 @@ bot.on('callback_query', async (callbackQuery) => {
             meeting_commitment_id: meetingCommitmentId,
             created_at: request.data().created_at,
             accepted_at: new Date().toISOString(),
-            meeting_scheduled_at: meetingStartTime.toISOString(),
+            meeting_scheduled_at: convertedMeetingStartTime,
             meeting_end_time: meetingEndTime,
             description: request.data().description,
             recruiter_commitment_state: 'pending_meeting',
@@ -818,10 +797,9 @@ bot.on('callback_query', async (callbackQuery) => {
             meeting_duration: meeting_duration, // Include meeting duration
             duration_in_minutes: duration_in_minutes // Include duration in minutes
           });
-          console.log(`Meeting commitment stored in Firestore for meeting commitment ID: ${meetingCommitmentId} with counterpart_id: ${request.data().counterpart_id}`);
 
           // Notify both parties
-          bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${selectedTimeSlot}.`);
+          bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${convertedMeetingStartTime}.`);
           bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}.\n\n📍 Meeting is scheduled at ${selectedTimeSlot}.`);
 
           //-------------- Schedule feedback request generation after 2.5 hours ----------//
