@@ -878,7 +878,7 @@ bot.on('callback_query', async (callbackQuery) => {
             });
 
             // Notify the user about their trial subscription activation
-            bot.sendMessage(recruiter_id, `🚀 Your *trial subscription* is now active for 14 days, expiring on ${moment(trialExpiryDate).format('YYYY-MM-DD HH:mm')}.`);
+            bot.sendMessage(recruiter_id, `🚀 Your *trial subscription* is now active for *14 days*, expiring on ${moment(trialExpiryDate).format('YYYY-MM-DD HH:mm', { parse_mode: 'Markdown' })}.`);
           }
         } else {
           bot.sendMessage(chatId, '🙅 Invalid time slot selected.');
@@ -1085,6 +1085,9 @@ bot.onText(/\/meetingstatus/, async (msg) => {
     const recruiterMeetingsSnapshot = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
     const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
 
+    console.log(`Number of recruiter meetings fetched: ${recruiterMeetingsSnapshot.size}`);
+    console.log(`Number of job seeker meetings fetched: ${jobSeekerMeetingsSnapshot.size}`);
+
     const upcomingMeetings = [];
 
     recruiterMeetingsSnapshot.forEach(doc => {
@@ -1144,6 +1147,9 @@ bot.onText(/\/meetinghistory/, async (msg) => {
 
     const recruiterMeetingsSnapshot = await db.collection('meetingCommitments').where('recruiter_id', '==', chatId).get();
     const jobSeekerMeetingsSnapshot = await db.collection('meetingCommitments').where('counterpart_id', '==', chatId).get();
+
+    console.log(`Number of recruiter meetings fetched: ${recruiterMeetingsSnapshot.size}`);
+    console.log(`Number of job seeker meetings fetched: ${jobSeekerMeetingsSnapshot.size}`);
 
     const pastMeetings = [];
 
