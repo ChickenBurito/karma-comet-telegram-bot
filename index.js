@@ -807,7 +807,8 @@ bot.on('callback_query', async (callbackQuery) => {
           bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${recruiterMeetingTime}.`);
           bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}.\n\n📍 Meeting is scheduled at ${counterpartMeetingTime}.`);
 
-          //-------------- Schedule feedback request generation after 2.5 hours ----------//
+          //-------------- Schedule feedback request generation 30 minutes after meeting end ----------//
+          const feedbackRequestTime = moment(meetingEndTime).add(30, 'minutes').toDate();
           setTimeout(async () => {
             const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
             const commitment = await commitmentRef.get();
@@ -843,7 +844,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
               bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, { parse_mode: 'Markdown' }, daysOpts);
             }
-          }, 2.5 * 60 * 60 * 1000); // 2.5 hours in milliseconds
+          }, feedbackRequestTime - new Date());
           
           //-------- Activate trial if subscription is free and meeting is accepted ---------//
           const userRef = db.collection('users').doc(recruiter_id.toString());
