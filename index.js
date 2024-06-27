@@ -15,7 +15,7 @@ const moment = require('moment-timezone'); //sync users within different time-zo
 moment.tz.load(require('moment-timezone/data/packed/latest.json'));
 
 // Check required environment variables
-const requiredEnvVars = ['STRIPE_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'BOT_URL'];
+const requiredEnvVars = ['STRIPE_TEST_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'BOT_URL'];
 
 requiredEnvVars.forEach((key) => {
   if (!process.env[key]) {
@@ -35,7 +35,7 @@ try {
   process.exit(1);
 }
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_TEST_SECRET_KEY);
 
 // Initialize Firebase
 try {
@@ -1520,6 +1520,13 @@ app.post('/webhook', (req, res) => {
     return;
   }
 
+  // Check if the event is from test mode
+  if (!event.livemode) {
+    console.log('Received a test event.');
+  } else {
+    console.log('Received a live event.');
+  }  
+
   // Handle the event
   switch (event.type) {
     case 'customer.subscription.created':
@@ -1654,9 +1661,9 @@ bot.on('callback_query', async (callbackQuery) => {
 
   let priceId;
   if (callbackQuery.data === 'subscribe_yearly') {
-    priceId = 'price_1PT8hBP9AlrL3WaNuwqClhBs';
+    priceId = 'price_1PWKHrP9AlrL3WaNM00tMFk1';
   } else if (callbackQuery.data === 'subscribe_monthly') {
-    priceId = 'price_1PT87KP9AlrL3WaNK4UsnChE';
+    priceId = 'price_1PWKHCP9AlrL3WaNZJ2wentT';
   } else if (callbackQuery.data === 'unsubscribe') {
     const stripeCustomerId = user.stripeCustomerId;
 
