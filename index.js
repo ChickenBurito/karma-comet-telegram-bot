@@ -1140,22 +1140,22 @@ bot.onText(/\/meetinghistory/, async (msg) => {
     recruiterMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
       console.log(`Recruiter meeting data: ${JSON.stringify(data)}`);
-      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      const meetingTime = moment.tz(data.meeting_scheduled_at, 'UTC').tz(userTimeZone);
       if (meetingTime.isBefore(now)) {
-        pastMeetings.push(data);
+        pastMeetings.push({ ...data, meetingTime });
       }
     });
 
     jobSeekerMeetingsSnapshot.forEach(doc => {
       const data = doc.data();
       console.log(`Job Seeker meeting data: ${JSON.stringify(data)}`);
-      const meetingTime = moment.tz(data.meeting_scheduled_at, userTimeZone);
+      const meetingTime = moment.tz(data.meeting_scheduled_at, 'UTC').tz(userTimeZone);
       if (meetingTime.isBefore(now)) {
-        pastMeetings.push(data);
+        pastMeetings.push({ ...data, meetingTime });
       }
     });
 
-    pastMeetings.sort((a, b) => moment.tz(a.meeting_scheduled_at, userTimeZone) - moment.tz(b.meeting_scheduled_at, userTimeZone));
+    pastMeetings.sort((a, b) => a.meetingTime - b.meetingTime);
 
     if (pastMeetings.length > 0) {
       let responseMessage = '🗄 *Your Meeting History:*\n';
@@ -1163,7 +1163,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
         responseMessage += `🗳 *Meeting #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${meeting.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${meeting.recruiter_name}\n`;
-        responseMessage += `   *Meeting Scheduled Time:* ${moment.tz(meeting.meeting_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Meeting Scheduled Time:* ${meeting.meetingTime.format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${meeting.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
@@ -1176,7 +1176,7 @@ bot.onText(/\/meetinghistory/, async (msg) => {
   }
 });
 
-//------------------- Handle /feedbackstatus command ---------------//
+//------------------- Handle /feedbackstatus command ------------------//
 bot.onText(/\/feedbackstatus/, async (msg) => {
   console.log('/feedbackstatus command received');
   const chatId = msg.chat.id;
@@ -1184,31 +1184,41 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
   try {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
+      return;
+    }
     const userTimeZone = userDoc.data().timeZone || 'UTC';
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
+    console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
-    const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
-    const jobSeekerFeedbacks = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId).get();
+    const recruiterFeedbacksSnapshot = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerFeedbacksSnapshot = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId.toString()).get(); // Ensure chatId is a string
+
+    console.log(`Number of recruiter feedbacks fetched: ${recruiterFeedbacksSnapshot.size}`);
+    console.log(`Number of job seeker feedbacks fetched: ${jobSeekerFeedbacksSnapshot.size}`);
 
     const upcomingFeedbacks = [];
 
-    recruiterFeedbacks.forEach(doc => {
+    recruiterFeedbacksSnapshot.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      console.log(`Recruiter feedback data: ${JSON.stringify(data)}`);
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, 'UTC').tz(userTimeZone);
       if (feedbackTime.isAfter(now)) {
-        upcomingFeedbacks.push(data);
+        upcomingFeedbacks.push({ ...data, feedbackTime });
       }
     });
 
-    jobSeekerFeedbacks.forEach(doc => {
+    jobSeekerFeedbacksSnapshot.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      console.log(`Job Seeker feedback data: ${JSON.stringify(data)}`);
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, 'UTC').tz(userTimeZone);
       if (feedbackTime.isAfter(now)) {
-        upcomingFeedbacks.push(data);
+        upcomingFeedbacks.push({ ...data, feedbackTime });
       }
     });
 
-    upcomingFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
+    upcomingFeedbacks.sort((a, b) => a.feedbackTime - b.feedbackTime);
 
     if (upcomingFeedbacks.length > 0) {
       let responseMessage = '🗓 *Your Scheduled Feedbacks:*\n';
@@ -1216,7 +1226,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
         responseMessage += `🗳 *Feedback #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${feedback.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${feedback.recruiter_name}\n`;
-        responseMessage += `   *Feedback Scheduled At:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Feedback Scheduled At:* ${feedback.feedbackTime.format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
@@ -1229,7 +1239,7 @@ bot.onText(/\/feedbackstatus/, async (msg) => {
   }
 });
 
-//--------------- Handle /feedbackhistory command ---------------//
+//------------------- Handle /feedbackhistory command ---------------//
 bot.onText(/\/feedbackhistory/, async (msg) => {
   console.log('/feedbackhistory command received');
   const chatId = msg.chat.id;
@@ -1237,31 +1247,41 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
   try {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      bot.sendMessage(chatId, '🤷 User not found. Please register using /register.');
+      return;
+    }
     const userTimeZone = userDoc.data().timeZone || 'UTC';
     const now = moment.tz(userTimeZone); // Use moment to get current time in user's time zone
+    console.log(`Current time in user's time zone (${userTimeZone}): ${now.format('YYYY-MM-DD HH:mm:ss')}`);
 
-    const recruiterFeedbacks = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
-    const jobSeekerFeedbacks = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId).get();
+    const recruiterFeedbacksSnapshot = await db.collection('feedbackCommitments').where('recruiter_id', '==', chatId).get();
+    const jobSeekerFeedbacksSnapshot = await db.collection('feedbackCommitments').where('counterpart_id', '==', chatId.toString()).get(); // Ensure chatId is a string
+
+    console.log(`Number of recruiter feedbacks fetched: ${recruiterFeedbacksSnapshot.size}`);
+    console.log(`Number of job seeker feedbacks fetched: ${jobSeekerFeedbacksSnapshot.size}`);
 
     const pastFeedbacks = [];
 
-    recruiterFeedbacks.forEach(doc => {
+    recruiterFeedbacksSnapshot.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      console.log(`Recruiter feedback data: ${JSON.stringify(data)}`);
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, 'UTC').tz(userTimeZone);
       if (feedbackTime.isBefore(now)) {
-        pastFeedbacks.push(data);
+        pastFeedbacks.push({ ...data, feedbackTime });
       }
     });
 
-    jobSeekerFeedbacks.forEach(doc => {
+    jobSeekerFeedbacksSnapshot.forEach(doc => {
       const data = doc.data();
-      const feedbackTime = moment.tz(data.feedback_scheduled_at, userTimeZone);
+      console.log(`Job Seeker feedback data: ${JSON.stringify(data)}`);
+      const feedbackTime = moment.tz(data.feedback_scheduled_at, 'UTC').tz(userTimeZone);
       if (feedbackTime.isBefore(now)) {
-        pastFeedbacks.push(data);
+        pastFeedbacks.push({ ...data, feedbackTime });
       }
     });
 
-    pastFeedbacks.sort((a, b) => moment.tz(a.feedback_scheduled_at, userTimeZone) - moment.tz(b.feedback_scheduled_at, userTimeZone));
+    pastFeedbacks.sort((a, b) => a.feedbackTime - b.feedbackTime);
 
     if (pastFeedbacks.length > 0) {
       let responseMessage = '🗃 *Your Feedback History:*\n';
@@ -1269,7 +1289,7 @@ bot.onText(/\/feedbackhistory/, async (msg) => {
         responseMessage += `🗳 *Feedback #${index + 1}*\n`;
         responseMessage += `   *Job Seeker Name:* ${feedback.counterpart_name}\n`;
         responseMessage += `   *Recruiter Name:* ${feedback.recruiter_name}\n`;
-        responseMessage += `   *Feedback Scheduled At:* ${moment.tz(feedback.feedback_scheduled_at, userTimeZone).format('YYYY-MM-DD HH:mm')}\n`;
+        responseMessage += `   *Feedback Scheduled At:* ${feedback.feedbackTime.format('YYYY-MM-DD HH:mm')}\n`;
         responseMessage += `   *Description:* ${feedback.description}\n\n`;
       });
       bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
