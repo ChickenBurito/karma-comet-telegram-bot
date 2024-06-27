@@ -756,19 +756,26 @@ bot.on('callback_query', async (callbackQuery) => {
   } else if (data[0] === 'accept' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
     const selectedTimeSlot = data.slice(3).join(' ');
-
+  
     try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       const request = await requestRef.get();
-
+  
       if (request.exists) {
-        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone } = request.data();
-
-        // Ensure selectedTimeSlot is correctly defined
+        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone, accepted } = request.data();
+  
+        if (accepted) {
+          bot.sendMessage(chatId, '🙅 This meeting has already been accepted.');
+          return;
+        }
+  
         if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
           // Convert selected time slot to UTC
           const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone).utc();
           const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
+  
+          // Mark the meeting as accepted
+          await requestRef.update({ accepted: true });
   
           const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
           await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
