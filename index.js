@@ -1777,7 +1777,7 @@ const sendMeetingReminders = async () => {
 
   meetings.forEach(async (doc) => {
     const meeting = doc.data();
-    const meetingDate = moment.tz(meeting.meeting_scheduled_at, meeting.recruiter_timeZone);
+    const meetingDate = moment.tz(meeting.meeting_scheduled_at, 'UTC'); // Assume stored in UTC
 
     // Skip past meetings
     if (meetingDate.isBefore(now)) {
@@ -1791,36 +1791,40 @@ const sendMeetingReminders = async () => {
     const recruiterTimeZone = recruiterRef.exists ? recruiterRef.data().timeZone : 'UTC';
     const counterpartTimeZone = counterpartRef.exists ? counterpartRef.data().timeZone : 'UTC';
 
-    const recruiterNow = moment.tz(now, recruiterTimeZone);
-    const counterpartNow = moment.tz(now, counterpartTimeZone);
+    const recruiterMeetingTime = meetingDate.clone().tz(recruiterTimeZone);
+    const counterpartMeetingTime = meetingDate.clone().tz(counterpartTimeZone);
+
+    const recruiterReminder24h = recruiterMeetingTime.clone().subtract(24, 'hours');
+    const recruiterReminder1h = recruiterMeetingTime.clone().subtract(1, 'hour');
+    const counterpartReminder24h = counterpartMeetingTime.clone().subtract(24, 'hours');
+    const counterpartReminder1h = counterpartMeetingTime.clone().subtract(1, 'hour');
 
     // Reminder 24 hours before
-    if (meetingDate.diff(recruiterNow, 'hours') === 24) {
-      bot.sendMessage(meeting.recruiter_id, `🚨 *Reminder:* You have a *meeting* "${meeting.description}" with *${meeting.counterpart_name}* scheduled on *${meetingDate.format()}*.`, { parse_mode: 'Markdown' });
+    if (moment().isBetween(recruiterReminder24h, recruiterReminder24h.clone().add(1, 'minutes'))) {
+      bot.sendMessage(meeting.recruiter_id, `🚨 *Reminder:* You have a *meeting* "${meeting.description}" with *${meeting.counterpart_name}* scheduled on *${recruiterMeetingTime.format('YYYY-MM-DD HH:mm')}*.`, { parse_mode: 'Markdown' });
     }
-    if (meetingDate.diff(counterpartNow, 'hours') === 24) {
-      bot.sendMessage(meeting.counterpart_id, `🚨 *Reminder:* You have a *meeting* "${meeting.description}" with *${meeting.recruiter_name}* scheduled on *${meetingDate.format()}*.`, { parse_mode: 'Markdown' });
+    if (moment().isBetween(counterpartReminder24h, counterpartReminder24h.clone().add(1, 'minutes'))) {
+      bot.sendMessage(meeting.counterpart_id, `🚨 *Reminder:* You have a *meeting* "${meeting.description}" with *${meeting.recruiter_name}* scheduled on *${counterpartMeetingTime.format('YYYY-MM-DD HH:mm')}*.`, { parse_mode: 'Markdown' });
     }
 
     // Reminder 1 hour before
-    if (meetingDate.diff(recruiterNow, 'hours') === 1) {
+    if (moment().isBetween(recruiterReminder1h, recruiterReminder1h.clone().add(1, 'minutes'))) {
       bot.sendMessage(meeting.recruiter_id, `🚨 *Reminder:* Your *meeting* "${meeting.description}" with *${meeting.counterpart_name}* is happening in *1 hour*.`, { parse_mode: 'Markdown' });
     }
-    if (meetingDate.diff(counterpartNow, 'hours') === 1) {
+    if (moment().isBetween(counterpartReminder1h, counterpartReminder1h.clone().add(1, 'minutes'))) {
       bot.sendMessage(meeting.counterpart_id, `🚨 *Reminder:* Your *meeting* "${meeting.description}" with *${meeting.recruiter_name}* is happening in *1 hour*.`, { parse_mode: 'Markdown' });
     }
   });
 };
 
-// Function to send feedback reminders
 const sendFeedbackReminders = async () => {
   console.log('Sending feedback reminders...');
   const now = new Date();
-  const feedbacks = await db.collection('feedbackCommitments').get();
+  const feedbacks = await db.collection('feedbackRequests').get();
 
   feedbacks.forEach(async (doc) => {
     const feedback = doc.data();
-    const feedbackDate = moment.tz(feedback.feedback_scheduled_at, feedback.recruiter_timeZone);
+    const feedbackDate = moment.tz(feedback.feedback_scheduled_at, 'UTC'); // Assume stored in UTC
 
     // Skip past feedbacks
     if (feedbackDate.isBefore(now)) {
@@ -1834,30 +1838,35 @@ const sendFeedbackReminders = async () => {
     const recruiterTimeZone = recruiterRef.exists ? recruiterRef.data().timeZone : 'UTC';
     const counterpartTimeZone = counterpartRef.exists ? counterpartRef.data().timeZone : 'UTC';
 
-    const recruiterNow = moment.tz(now, recruiterTimeZone);
-    const counterpartNow = moment.tz(now, counterpartTimeZone);
+    const recruiterFeedbackTime = feedbackDate.clone().tz(recruiterTimeZone);
+    const counterpartFeedbackTime = feedbackDate.clone().tz(counterpartTimeZone);
+
+    const recruiterReminder24h = recruiterFeedbackTime.clone().subtract(24, 'hours');
+    const recruiterReminder1h = recruiterFeedbackTime.clone().subtract(1, 'hour');
+    const counterpartReminder24h = counterpartFeedbackTime.clone().subtract(24, 'hours');
+    const counterpartReminder1h = counterpartFeedbackTime.clone().subtract(1, 'hour');
 
     // Reminder 24 hours before
-    if (feedbackDate.diff(recruiterNow, 'hours') === 24) {
-      bot.sendMessage(feedback.recruiter_id, `🚨 *Reminder:* You need to provide *feedback* for your meeting with *${feedback.counterpart_name}* by *${feedbackDate.format()}*.`, { parse_mode: 'Markdown' });
+    if (moment().isBetween(recruiterReminder24h, recruiterReminder24h.clone().add(1, 'minutes'))) {
+      bot.sendMessage(feedback.recruiter_id, `🚨 *Reminder:* You have a *feedback* request for your meeting with *${feedback.counterpart_name}* scheduled on *${recruiterFeedbackTime.format('YYYY-MM-DD HH:mm')}*.`, { parse_mode: 'Markdown' });
     }
-    if (feedbackDate.diff(counterpartNow, 'hours') === 24) {
-      bot.sendMessage(feedback.counterpart_id, `🚨 *Reminder:* *${feedback.recruiter_name}* needs to provide *feedback* for your meeting by *${feedbackDate.format()}*.`, { parse_mode: 'Markdown' });
+    if (moment().isBetween(counterpartReminder24h, counterpartReminder24h.clone().add(1, 'minutes'))) {
+      bot.sendMessage(feedback.counterpart_id, `🚨 *Reminder:* You have a *feedback* request for your meeting with *${feedback.recruiter_name}* scheduled on *${counterpartFeedbackTime.format('YYYY-MM-DD HH:mm')}*.`, { parse_mode: 'Markdown' });
     }
 
     // Reminder 1 hour before
-    if (feedbackDate.diff(recruiterNow, 'hours') === 1) {
-      bot.sendMessage(feedback.recruiter_id, `🚨 *Reminder:* Your *feedback* for the meeting with *${feedback.counterpart_name}* is due in *1 hour*.`, { parse_mode: 'Markdown' });
+    if (moment().isBetween(recruiterReminder1h, recruiterReminder1h.clone().add(1, 'minutes'))) {
+      bot.sendMessage(feedback.recruiter_id, `🚨 *Reminder:* Your *feedback* request for your meeting with *${feedback.counterpart_name}* is due in *1 hour*.`, { parse_mode: 'Markdown' });
     }
-    if (feedbackDate.diff(counterpartNow, 'hours') === 1) {
-      bot.sendMessage(feedback.counterpart_id, `🚨 *Reminder:* *${feedback.recruiter_name}'s* feedback for your meeting is due in *1 hour*.`, { parse_mode: 'Markdown' });
+    if (moment().isBetween(counterpartReminder1h, counterpartReminder1h.clone().add(1, 'minutes'))) {
+      bot.sendMessage(feedback.counterpart_id, `🚨 *Reminder:* Your *feedback* request for your meeting with *${feedback.recruiter_name}* is due in *1 hour*.`, { parse_mode: 'Markdown' });
     }
   });
 };
 
-// Schedule the reminder functions to run every hour
-schedule.scheduleJob('0 * * * *', sendMeetingReminders);
-schedule.scheduleJob('0 * * * *', sendFeedbackReminders);
+// Schedule the reminder functions to run every minute
+schedule.scheduleJob('* * * * *', sendMeetingReminders);
+schedule.scheduleJob('* * * * *', sendFeedbackReminders);
 
 app.get('/', (req, res) => {
   res.send('Yay! KarmaComet bot is up and running!');
