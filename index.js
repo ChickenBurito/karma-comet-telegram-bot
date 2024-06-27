@@ -1581,7 +1581,7 @@ const createCheckoutSession = async (priceId, chatId) => {
       ],
       mode: 'subscription',
       success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.BOT_URL}/cancel`
+      cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
     });
 
     const userRef = db.collection('users').doc(chatId.toString());
@@ -1627,7 +1627,9 @@ app.get('/subscription-status', async (req, res) => {
 
 // Success route
 app.get('/success', async (req, res) => {
+  console.log('Accessed /success route');
   const sessionId = req.query.session_id;
+  console.log(`Received session ID: ${sessionId}`);
 
   if (!sessionId) {
     res.status(400).send('Session ID is required');
@@ -1636,10 +1638,10 @@ app.get('/success', async (req, res) => {
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    console.log(`Stripe session retrieved: ${JSON.stringify(session)}`);
 
     if (session) {
-      // Additional logic, e.g., updating the database, sending a confirmation email, etc.
-      const chatId = session.client_reference_id; // Assuming the chat ID is set in the client reference ID when creating the session
+      const chatId = session.client_reference_id; // Ensure this is set when creating the session
 
       // Send a chat bot message to notify the user
       if (chatId) {
@@ -1658,7 +1660,9 @@ app.get('/success', async (req, res) => {
 
 // Cancel route
 app.get('/cancel', (req, res) => {
+  console.log('Accessed /cancel route');
   const sessionId = req.query.session_id;
+  console.log(`Received session ID: ${sessionId}`);
 
   // Optionally, log the cancellation or perform other actions
   if (sessionId) {
