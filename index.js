@@ -1625,6 +1625,50 @@ app.get('/subscription-status', async (req, res) => {
   }
 });
 
+// Success route
+app.get('/success', async (req, res) => {
+  const sessionId = req.query.session_id;
+
+  if (!sessionId) {
+    res.status(400).send('Session ID is required');
+    return;
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session) {
+      // Additional logic, e.g., updating the database, sending a confirmation email, etc.
+      const chatId = session.client_reference_id; // Assuming the chat ID is set in the client reference ID when creating the session
+
+      // Send a chat bot message to notify the user
+      if (chatId) {
+        bot.sendMessage(chatId, '🎉 Your subscription was successful! Thank you for subscribing.');
+      }
+
+      res.send('Thank you for your subscription! Your payment was successful.');
+    } else {
+      res.status(404).send('Session not found');
+    }
+  } catch (error) {
+    console.error('Error retrieving checkout session:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Cancel route
+app.get('/cancel', (req, res) => {
+  const sessionId = req.query.session_id;
+
+  // Optionally, log the cancellation or perform other actions
+  if (sessionId) {
+    console.log(`Subscription process was canceled for session ID: ${sessionId}`);
+    // Perform additional logic if necessary
+  }
+
+  res.send('Your subscription process was canceled. Please try again.');
+});
+
 // Handle /subscribe command
 bot.onText(/\/subscribe/, async (msg) => {
   console.log('/subscribe command received');
