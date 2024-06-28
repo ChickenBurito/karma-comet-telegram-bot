@@ -1556,6 +1556,7 @@ const handleSubscriptionUpdate = async (subscription) => {
     snapshot.forEach(async (doc) => {
       const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
       console.log(`Updating subscription for user ${doc.id} to status ${subscription.status}`);
+      console.log(`Subscription ID: ${subscription.id}`);
       await doc.ref.update({
         'subscription.status': 'active',
         'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
