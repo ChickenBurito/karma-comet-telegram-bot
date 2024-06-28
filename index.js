@@ -1619,8 +1619,8 @@ const createCheckoutSession = async (priceId, chatId) => {
       ],
       mode: 'subscription',
       customer: customerId, // Link the session to the Stripe customer
-      success_url: constructUrl(process.env.BOT_URL, `/success?session_id={CHECKOUT_SESSION_ID}`),
-      cancel_url: constructUrl(process.env.BOT_URL, `/cancel?session_id={CHECKOUT_SESSION_ID}`)
+      success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
     });
 
     return session.url;
