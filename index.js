@@ -1518,7 +1518,9 @@ app.post('/webhook', (req, res) => {
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    console.log(`Webhook event received: ${event.type}`);
   } catch (err) {
+    console.error(`Webhook Error: ${err.message}`);
     res.status(400).send(`Webhook Error: ${err.message}`);
     return;
   }
@@ -1555,10 +1557,14 @@ const handleSubscriptionUpdate = async (subscription) => {
   if (!snapshot.empty) {
     snapshot.forEach(async (doc) => {
       const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
-      console.log(`Updating subscription for user ${doc.id} to status ${subscription.status}`);
+      let status = subscription.status;
+      if (status === 'canceled' && subscription.cancel_at_period_end) {
+        status = 'canceled'; // Mark as canceled but user still has access until end of period
+      }
+      console.log(`Updating subscription for user ${doc.id} to status ${status}`);
       console.log(`Subscription ID: ${subscription.id}`);
       await doc.ref.update({
-        'subscription.status': 'active',
+        'subscription.status': status,
         'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
         stripeSubscriptionId: subscription.id
       });
