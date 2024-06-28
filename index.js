@@ -1790,7 +1790,7 @@ const handleUnsubscribe = async (customerId) => {
     const subscriptions = await stripe.subscriptions.list({ customer: customerId });
     if (subscriptions.data.length > 0) {
       for (const subscription of subscriptions.data) {
-        await stripe.subscriptions.del(subscription.id);
+        await stripe.subscriptions.cancel(subscription.id);
       }
     } else {
       console.log('No active subscriptions found for customer:', customerId);
