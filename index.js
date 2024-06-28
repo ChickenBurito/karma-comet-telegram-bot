@@ -9,13 +9,13 @@ const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 const schedule = require('node-schedule');
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const endpointSecret = process.env.STRIPE_TEST_WEBHOOK_SECRET;
 const cron = require('node-cron'); //cron is used for scheduling tasks
 const moment = require('moment-timezone'); //sync users within different time-zones
 moment.tz.load(require('moment-timezone/data/packed/latest.json'));
 
 // Check required environment variables
-const requiredEnvVars = ['STRIPE_TEST_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'BOT_URL'];
+const requiredEnvVars = ['STRIPE_TEST_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_TEST_WEBHOOK_SECRET', 'BOT_URL'];
 
 requiredEnvVars.forEach((key) => {
   if (!process.env[key]) {
