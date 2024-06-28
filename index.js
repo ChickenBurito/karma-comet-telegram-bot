@@ -1555,12 +1555,15 @@ const handleSubscriptionUpdate = async (subscription) => {
   if (!snapshot.empty) {
     snapshot.forEach(async (doc) => {
       const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
+      console.log(`Updating subscription for user ${doc.id} to status ${subscription.status}`);
       await doc.ref.update({
-        'subscription.status': subscription.status,
+        'subscription.status': 'active',
         'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
         stripeSubscriptionId: subscription.id
       });
     });
+  } else {
+    console.log(`No user found with stripeCustomerId: ${customerId}`);
   }
 };
 
@@ -1572,12 +1575,15 @@ const handleSubscriptionCancellation = async (subscription) => {
 
   if (!snapshot.empty) {
     snapshot.forEach(async (doc) => {
+      console.log(`Cancelling subscription for user ${doc.id}`);
       await doc.ref.update({
         'subscription.status': 'canceled',
         'subscription.expiry': null,
         stripeSubscriptionId: null
       });
     });
+  } else {
+    console.log(`No user found with stripeCustomerId: ${customerId}`);
   }
 };
 
