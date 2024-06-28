@@ -131,6 +131,8 @@ const registerUser = async (chatId, userName) => {
           status: 'free', // Default to free
           expiry: null
         },
+        stripeCustomerId: null, // Initialize Stripe customer ID as null
+        stripeSubscriptionId: null, // Initialize subscription ID as null
         timeZone: null // Initialize timeZone as null
       });
       console.log(`User ${userName} with chat ID: ${chatId} registered successfully.`);
@@ -1513,6 +1515,7 @@ scheduleExistingFeedbackCommitments();
 app.post('/webhook', (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
+
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
@@ -1525,7 +1528,7 @@ app.post('/webhook', (req, res) => {
     console.log('Received a test event.');
   } else {
     console.log('Received a live event.');
-  }  
+  }
 
   // Handle the event
   switch (event.type) {
@@ -1545,32 +1548,67 @@ app.post('/webhook', (req, res) => {
 
 // Function to handle subscription updates
 const handleSubscriptionUpdate = async (subscription) => {
-  const userRef = db.collection('users').doc(subscription.customer);
-  const userDoc = await userRef.get();
+  const customerId = subscription.customer;
+  const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
+  const snapshot = await userRef.get();
 
-  if (userDoc.exists) {
-    const user = userDoc.data();
-    const userTimeZone = user.timeZone || 'UTC'; // Retrieve user's time zone
-
-    await userRef.update({
-      'subscription.status': subscription.status,
-      'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString()
+  if (!snapshot.empty) {
+    snapshot.forEach(async (doc) => {
+      const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
+      await doc.ref.update({
+        'subscription.status': subscription.status,
+        'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
+        stripeSubscriptionId: subscription.id
+      });
     });
   }
 };
 
 // Function to handle subscription cancellations
 const handleSubscriptionCancellation = async (subscription) => {
-  const userRef = db.collection('users').doc(subscription.customer);
-  await userRef.update({
-    'subscription.status': 'canceled',
-    'subscription.expiry': null
-  });
+  const customerId = subscription.customer;
+  const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
+  const snapshot = await userRef.get();
+
+  if (!snapshot.empty) {
+    snapshot.forEach(async (doc) => {
+      await doc.ref.update({
+        'subscription.status': 'canceled',
+        'subscription.expiry': null,
+        stripeSubscriptionId: null
+      });
+    });
+  }
 };
 
 // Creating a Stripe checkout session for recruiters
 const createCheckoutSession = async (priceId, chatId) => {
   try {
+    const userRef = db.collection('users').doc(chatId.toString());
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      throw new Error('User not found');
+    }
+
+    const user = userDoc.data();
+    let customerId = user.stripeCustomerId;
+
+    // Create a Stripe customer if one doesn't exist
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        name: user.name,
+        metadata: {
+          chatId: chatId.toString(),
+          telegramUserName: user.name
+        }
+      });
+      customerId = customer.id;
+      await userRef.update({
+        stripeCustomerId: customerId
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -1580,23 +1618,10 @@ const createCheckoutSession = async (priceId, chatId) => {
         }
       ],
       mode: 'subscription',
-      success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
+      customer: customerId, // Link the session to the Stripe customer
+      success_url: constructUrl(process.env.BOT_URL, `/success?session_id={CHECKOUT_SESSION_ID}`),
+      cancel_url: constructUrl(process.env.BOT_URL, `/cancel?session_id={CHECKOUT_SESSION_ID}`)
     });
-
-    const userRef = db.collection('users').doc(chatId.toString());
-    const userDoc = await userRef.get();
-
-    if (userDoc.exists) {
-      const user = userDoc.data();
-      const userTimeZone = user.timeZone || 'UTC'; // Retrieve user's time zone
-
-      await userRef.update({
-        stripeCustomerId: session.customer,
-        'subscription.status': 'active',
-        'subscription.expiry': moment().tz(userTimeZone).add(14, 'days').toISOString() // Set expiry date to 14 days from now
-      });
-    }
 
     return session.url;
   } catch (error) {
@@ -1721,10 +1746,17 @@ bot.on('callback_query', async (callbackQuery) => {
     }
 
     try {
+      const subscriptions = await stripe.subscriptions.list({ customer: stripeCustomerId });
+      if (subscriptions.data.length === 0) {
+        bot.sendMessage(chatId, '🤷 You do not have an active subscription to unsubscribe from.');
+        return;
+      }
+
       await handleUnsubscribe(stripeCustomerId);
       await db.collection('users').doc(chatId.toString()).update({
         'subscription.status': 'canceled',
-        'subscription.expiry': null
+        'subscription.expiry': null,
+        stripeSubscriptionId: null
       });
       bot.sendMessage(chatId, '😿 Your subscription has been canceled.');
     } catch (error) {
@@ -1750,7 +1782,9 @@ const handleUnsubscribe = async (customerId) => {
   try {
     const subscriptions = await stripe.subscriptions.list({ customer: customerId });
     if (subscriptions.data.length > 0) {
-      await stripe.subscriptions.del(subscriptions.data[0].id);
+      for (const subscription of subscriptions.data) {
+        await stripe.subscriptions.del(subscription.id);
+      }
     } else {
       console.log('No active subscriptions found for customer:', customerId);
     }
