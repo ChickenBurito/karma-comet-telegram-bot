@@ -1508,11 +1508,11 @@ scheduleExistingMeetingCommitments();
 scheduleExistingFeedbackCommitments();
 
 ////*******************////
-/// Subscription logic ///
+//// Subscription logic ////
 ////******************////
 
 // Webhook endpoint
-app.post('/webhook', (req, res) => {
+app.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
@@ -1535,20 +1535,20 @@ app.post('/webhook', (req, res) => {
   // Handle the event
   switch (event.type) {
     case 'checkout.session.completed':
-      handleCheckoutSessionCompleted(event.data.object);
+      await handleCheckoutSessionCompleted(event.data.object);
       break;
     case 'customer.subscription.created':
-      handleSubscriptionCreated(event.data.object);
+      await handleSubscriptionCreated(event.data.object);
       break;
     case 'customer.subscription.updated':
       if (event.data.object.cancel_at_period_end) {
-        handleSubscriptionCancellation(event.data.object);
+        await handleSubscriptionCancellation(event.data.object);
       } else {
-        handleSubscriptionUpdate(event.data.object);
+        await handleSubscriptionUpdate(event.data.object);
       }
       break;
     case 'customer.subscription.deleted':
-      handleSubscriptionDeletion(event.data.object);
+      await handleSubscriptionDeletion(event.data.object);
       break;
     default:
       console.log(`Unhandled event type ${event.type}`);
@@ -1572,13 +1572,15 @@ const handleCheckoutSessionCompleted = async (session) => {
     snapshot.forEach(async (doc) => {
       console.log(`Checkout session completed for user ${doc.id}`);
 
-      // No proration needed, just create a new subscription with the new price
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+      // Update the subscription to the new plan with proration
       const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
         items: [{
           id: subscription.items.data[0].id,
           price: newPriceId,
         }],
-        proration_behavior: 'none', // No proration
+        proration_behavior: 'create_prorations', // Apply proration
       });
 
       console.log(`Updated subscription: ${JSON.stringify(updatedSubscription)}`);
@@ -1724,13 +1726,13 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
         console.error(errorMessage);
         throw new Error(errorMessage);
       } else {
-        // Update the existing subscription with the new price
+        // Update the existing subscription with the new price and proration
         const updatedSubscription = await stripe.subscriptions.update(existingSubscription.id, {
           items: [{
             id: existingSubscription.items.data[0].id,
             price: priceId,
           }],
-          proration_behavior: 'none', // No proration
+          proration_behavior: 'create_prorations', // Apply proration
         });
 
         // Send confirmation message
