@@ -1588,6 +1588,20 @@ const handleCheckoutSessionCompleted = async (session) => {
   }
 };
 
+// Function to handle proration success
+const handleProrationSuccess = async (subscriptionId, newPriceId) => {
+  const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+    items: [{
+      id: subscription.items.data[0].id,
+      price: newPriceId,
+    }],
+    proration_behavior: 'create_prorations',
+  });
+
+  return updatedSubscription;
+};
+
+
 // Function to handle subscription create
 const handleSubscriptionCreated = async (subscription) => {
   const customerId = subscription.customer;
@@ -1676,14 +1690,15 @@ const handleSubscriptionDeletion = async (subscription) => {
   }
 };
 
+//Creating a Stripe Prorated checkout session
 const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
   // Calculate the remaining time in the current period in seconds
-  const remainingTime = (subscription.current_period_end - Date.now() / 1000);
+  const remainingTime = subscription.current_period_end - Math.floor(Date.now() / 1000);
 
   // Calculate the proration amount
-  const unitAmount = subscription.items.data[0].plan.amount;
+  const unitAmount = subscription.items.data[0].price.unit_amount;
   const proratedAmount = Math.round((unitAmount / (subscription.current_period_end - subscription.current_period_start)) * remainingTime);
 
   // Create a Checkout Session for the proration
@@ -1801,19 +1816,6 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
     throw new Error(error.message || 'Internal Server Error');
   }
 };
-
-const handleProrationSuccess = async (subscriptionId, newPriceId) => {
-  const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
-    items: [{
-      id: subscription.items.data[0].id,
-      price: newPriceId,
-    }],
-    cancel_at_period_end: false, // Ensure the subscription does not cancel at the period end
-  });
-
-  return updatedSubscription;
-};
-
 
 // Endpoint to retrieve the subscription status for a user
 app.get('/subscription-status', async (req, res) => {
