@@ -1560,8 +1560,10 @@ app.post('/webhook', (req, res) => {
 // Handle checkout.session.completed
 const handleCheckoutSessionCompleted = async (session) => {
   const customerId = session.customer;
-  const subscriptionId = session.subscription;
+  const subscriptionId = session.metadata.subscription_id;
   const newPriceId = session.metadata.new_price_id;
+
+  console.log(`Handling checkout.session.completed for session: ${JSON.stringify(session)}`);
 
   const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
   const snapshot = await userRef.get();
@@ -1578,6 +1580,8 @@ const handleCheckoutSessionCompleted = async (session) => {
         }],
         proration_behavior: 'create_prorations',
       });
+
+      console.log(`Updated subscription: ${JSON.stringify(updatedSubscription)}`);
 
       const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
       await doc.ref.update({
@@ -1699,13 +1703,16 @@ const handleSubscriptionDeletion = async (subscription) => {
 //Creating a Stripe Prorated checkout session
 const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  console.log(`Retrieved subscription: ${JSON.stringify(subscription)}`);
 
   // Calculate the remaining time in the current period in seconds
   const remainingTime = subscription.current_period_end - Math.floor(Date.now() / 1000);
+  console.log(`Remaining time: ${remainingTime}`);
 
   // Calculate the proration amount
   const unitAmount = subscription.items.data[0].price.unit_amount;
   const proratedAmount = Math.round((unitAmount / (subscription.current_period_end - subscription.current_period_start)) * remainingTime);
+  console.log(`Prorated amount: ${proratedAmount}`);
 
   // Create a Checkout Session for the proration
   const session = await stripe.checkout.sessions.create({
@@ -1724,9 +1731,15 @@ const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
     ],
     mode: 'payment',
     customer: subscription.customer,
-    success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}&subscription_id=${subscriptionId}&new_price_id=${newPriceId}`,
+    metadata: {
+      subscription_id: subscriptionId,
+      new_price_id: newPriceId
+    },
+    success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`,
   });
+
+  console.log(`Created Checkout Session: ${JSON.stringify(session)}`);
 
   return session.url;
 };
