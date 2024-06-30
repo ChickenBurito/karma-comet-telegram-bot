@@ -1560,24 +1560,30 @@ app.post('/webhook', (req, res) => {
 // Handle checkout.session.completed
 const handleCheckoutSessionCompleted = async (session) => {
   const customerId = session.customer;
+  const subscriptionId = session.subscription;
+  const newPriceId = session.metadata.new_price_id;
+
   const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
   const snapshot = await userRef.get();
 
   if (!snapshot.empty) {
     snapshot.forEach(async (doc) => {
       console.log(`Checkout session completed for user ${doc.id}`);
-      const subscriptionId = session.subscription;
 
-      // Check if this was a proration payment
-      if (session.metadata && session.metadata.new_price_id) {
-        await handleProrationSuccess(subscriptionId, session.metadata.new_price_id);
-      }
+      // Update the subscription to the new plan
+      const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+        items: [{
+          id: subscription.items.data[0].id,
+          price: newPriceId,
+        }],
+        proration_behavior: 'create_prorations',
+      });
 
       const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
       await doc.ref.update({
-        'subscription.status': 'active',
-        'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
-        stripeSubscriptionId: subscriptionId
+        'subscription.status': updatedSubscription.status,
+        'subscription.expiry': moment(updatedSubscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
+        stripeSubscriptionId: updatedSubscription.id
       });
 
       // Send a chat bot message to notify the user
