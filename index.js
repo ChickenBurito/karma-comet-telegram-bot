@@ -1560,7 +1560,7 @@ app.post('/webhook', async (req, res) => {
 // Handle checkout session completed
 const handleCheckoutSessionCompleted = async (session) => {
   const customerId = session.customer;
-  const subscriptionId = session.metadata.subscription_id;
+  const subscriptionId = session.subscription; // Ensure this is set in session metadata
   const newPriceId = session.metadata.new_price_id;
 
   console.log(`Handling checkout.session.completed for session: ${JSON.stringify(session)}`);
@@ -1735,9 +1735,7 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
           proration_behavior: 'create_prorations', // Apply proration
         });
 
-        // Send confirmation message
-        bot.sendMessage(chatId, `🎉 Your subscription has been updated to ${subscriptionType} plan successfully.`);
-        return null;
+        return null; // No URL, as the subscription is updated
       }
     } else {
       // Create a new subscription
@@ -1751,6 +1749,7 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
         ],
         mode: 'subscription',
         customer: customerId, // Link the session to the Stripe customer
+        client_reference_id: chatId.toString(), // Add this line to ensure client_reference_id is set
         success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
       });
