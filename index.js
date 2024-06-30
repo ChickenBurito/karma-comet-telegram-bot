@@ -1950,8 +1950,8 @@ const checkSubscription = async (req, res, next) => {
         return next();
       }
 
-      // Check subscription status only for recruiters
-      if (user.userType === 'recruiter') {
+       // Check subscription status only for recruiters
+       if (user.userType === 'recruiter') {
         const now = moment().tz(user.timeZone || 'UTC');
         const expiryDate = moment(user.subscription.expiry).tz(user.timeZone || 'UTC');
 
@@ -1962,10 +1962,8 @@ const checkSubscription = async (req, res, next) => {
           bot.sendMessage(chatId, '❗❗ Your trial period has expired.\n\n💳 Please subscribe to continue using the service.');
           return;
         } else if (user.subscription.status === 'expired') {
-          if (notAllowedCommands.includes(command)) {
-            bot.sendMessage(chatId, '❗❗ Your subscription has expired.\n\n💳 Please subscribe to continue using the service.');
-            return;
-          }
+          bot.sendMessage(chatId, '❗❗ Your subscription has expired.\n\n💳 Please subscribe to continue using the service.');
+          return;
         }
       }
     }
@@ -1974,7 +1972,7 @@ const checkSubscription = async (req, res, next) => {
 };
 
 // Apply middleware to all bot commands
-app.use(checkSubscription);
+bot.use(checkSubscription);
 
 // Schedule the function to check subscription status every day
 schedule.scheduleJob('0 0 * * *', async () => {
