@@ -1557,29 +1557,7 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ received: true });
 });
 
-const handleSubscriptionCreated = async (subscription) => {
-  const customerId = subscription.customer;
-  const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
-  const snapshot = await userRef.get();
-
-  if (!snapshot.empty) {
-    snapshot.forEach(async (doc) => {
-      console.log(`Subscription created for user ${doc.id}`);
-      const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
-      await doc.ref.update({
-        'subscription.status': subscription.status,
-        'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
-        stripeSubscriptionId: subscription.id
-      });
-
-      // Send a chat bot message to notify the user
-      bot.sendMessage(doc.id, '🎉 Your subscription was successful! Thank you for subscribing.');
-    });
-  } else {
-    console.log(`No user found with stripeCustomerId: ${customerId}`);
-  }
-};
-
+// Handle checkout.session.completed
 const handleCheckoutSessionCompleted = async (session) => {
   const customerId = session.customer;
   const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
@@ -1590,14 +1568,16 @@ const handleCheckoutSessionCompleted = async (session) => {
       console.log(`Checkout session completed for user ${doc.id}`);
       const subscriptionId = session.subscription;
 
-      // Retrieve the updated subscription
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      // Check if this was a proration payment
+      if (session.metadata && session.metadata.new_price_id) {
+        await handleProrationSuccess(subscriptionId, session.metadata.new_price_id);
+      }
 
       const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
       await doc.ref.update({
-        'subscription.status': subscription.status,
+        'subscription.status': 'active',
         'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
-        stripeSubscriptionId: subscription.id
+        stripeSubscriptionId: subscriptionId
       });
 
       // Send a chat bot message to notify the user
@@ -1674,6 +1654,48 @@ const handleSubscriptionDeletion = async (subscription) => {
   }
 };
 
+const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+  // Calculate the prorated amount
+  const invoiceItem = await stripe.invoiceItems.create({
+    customer: subscription.customer,
+    amount: subscription.plan.amount * (subscription.current_period_end - Date.now()) / (subscription.current_period_end - subscription.current_period_start),
+    currency: subscription.plan.currency,
+    description: 'Prorated charge for plan change',
+  });
+
+  // Create the invoice
+  const invoice = await stripe.invoices.create({
+    customer: subscription.customer,
+    auto_advance: true, // Auto-finalize the invoice
+    collection_method: 'charge_automatically',
+  });
+
+  // Create a Checkout Session
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price_data: {
+          currency: invoice.currency,
+          product_data: {
+            name: 'Prorated charge for plan change',
+          },
+          unit_amount: invoice.total,
+        },
+        quantity: 1,
+      }
+    ],
+    mode: 'payment',
+    customer: subscription.customer,
+    success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}&subscription_id=${subscriptionId}&new_price_id=${newPriceId}`,
+    cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`,
+  });
+
+  return session.url;
+};
+
 // Creating a Stripe checkout session for recruiters
 const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
   try {
@@ -1704,7 +1726,7 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
 
     // Check existing subscriptions
     const subscriptions = await stripe.subscriptions.list({ customer: customerId });
-    let existingSubscription = subscriptions.data.find(sub => sub.status === 'active' || sub.status === 'canceled' && !sub.ended_at);
+    let existingSubscription = subscriptions.data.find(sub => sub.status === 'active' || (sub.status === 'canceled' && !sub.ended_at));
 
     if (existingSubscription) {
       if ((subscriptionType === 'monthly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') ||
@@ -1714,15 +1736,33 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
         console.error(errorMessage);
         throw new Error(errorMessage);
       } else {
-        // Update the existing subscription to the new plan
-        await stripe.subscriptions.update(existingSubscription.id, {
-          items: [{
-            id: existingSubscription.items.data[0].id,
-            price: priceId,
-          }],
-          cancel_at_period_end: false // Ensure the subscription does not cancel at the period end
-        });
-        return null; // No need to return a session URL for updates
+        if (subscriptionType === 'yearly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') {
+          // Create a prorated checkout session and return the URL
+          const sessionUrl = await createProratedCheckoutSession(existingSubscription.id, priceId, chatId);
+          return sessionUrl;
+        } else {
+          // Cancel the existing subscription at the end of the current period for downgrades
+          await stripe.subscriptions.update(existingSubscription.id, {
+            cancel_at_period_end: true
+          });
+
+          // Create a new subscription
+          const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+              {
+                price: priceId,
+                quantity: 1
+              }
+            ],
+            mode: 'subscription',
+            customer: customerId, // Link the session to the Stripe customer
+            success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
+          });
+
+          return session.url;
+        }
       }
     } else {
       // Create a new subscription
@@ -1747,6 +1787,19 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
     throw new Error(error.message || 'Internal Server Error');
   }
 };
+
+const handleProrationSuccess = async (subscriptionId, newPriceId) => {
+  const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+    items: [{
+      id: subscription.items.data[0].id,
+      price: newPriceId,
+    }],
+    cancel_at_period_end: false, // Ensure the subscription does not cancel at the period end
+  });
+
+  return updatedSubscription;
+};
+
 
 // Endpoint to retrieve the subscription status for a user
 app.get('/subscription-status', async (req, res) => {
