@@ -1585,6 +1585,26 @@ const handleSubscriptionCancellation = async (subscription) => {
       console.log(`Cancelling subscription for user ${doc.id}`);
       await doc.ref.update({
         'subscription.status': 'canceled',
+        'subscription.expiry': moment(subscription.current_period_end * 1000).toISOString(), // Maintain expiry date
+        stripeSubscriptionId: subscription.id // Keep the subscription ID until it's fully expired
+      });
+    });
+  } else {
+    console.log(`No user found with stripeCustomerId: ${customerId}`);
+  }
+};
+
+// Function to handle subscription deletions
+const handleSubscriptionDeletion = async (subscription) => {
+  const customerId = subscription.customer;
+  const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
+  const snapshot = await userRef.get();
+
+  if (!snapshot.empty) {
+    snapshot.forEach(async (doc) => {
+      console.log(`Subscription expired for user ${doc.id}`);
+      await doc.ref.update({
+        'subscription.status': 'expired',
         'subscription.expiry': null,
         stripeSubscriptionId: null
       });
@@ -1595,7 +1615,7 @@ const handleSubscriptionCancellation = async (subscription) => {
 };
 
 // Creating a Stripe checkout session for recruiters
-const createCheckoutSession = async (priceId, chatId) => {
+const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
   try {
     const userRef = db.collection('users').doc(chatId.toString());
     const userDoc = await userRef.get();
@@ -1622,26 +1642,48 @@ const createCheckoutSession = async (priceId, chatId) => {
       });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1
-        }
-      ],
-      mode: 'subscription',
-      customer: customerId, // Link the session to the Stripe customer
-      success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
-    });
-
-    return session.url;
-  } catch (error) {
-    console.error('Error creating checkout session:', error);
-    throw new Error('Internal Server Error');
-  }
-};
+     // Check existing subscriptions
+     const subscriptions = await stripe.subscriptions.list({ customer: customerId });
+     let existingSubscription = subscriptions.data.find(sub => sub.status === 'active' || sub.status === 'canceled');
+ 
+     if (existingSubscription) {
+       if ((subscriptionType === 'monthly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') ||
+           (subscriptionType === 'yearly' && existingSubscription.items.data[0].price.id === 'price_1PWKHrP9AlrL3WaNM00tMFk1')) {
+         // If the subscription is of the same type, deny creating a new one
+         throw new Error('You already have an active subscription of this type.');
+       } else {
+         // Update the existing subscription to the new plan
+         await stripe.subscriptions.update(existingSubscription.id, {
+           items: [{
+             id: existingSubscription.items.data[0].id,
+             price: priceId,
+           }],
+           cancel_at_period_end: false, // Cancel the old subscription at period end
+         });
+       }
+     } else {
+       // Create a new subscription
+       const session = await stripe.checkout.sessions.create({
+         payment_method_types: ['card'],
+         line_items: [
+           {
+             price: priceId,
+             quantity: 1
+           }
+         ],
+         mode: 'subscription',
+         customer: customerId, // Link the session to the Stripe customer
+         success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+         cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
+       });
+ 
+       return session.url;
+     }
+   } catch (error) {
+     console.error('Error creating or updating subscription:', error);
+     throw new Error(error.message || 'Internal Server Error');
+   }
+ };
 
 // Endpoint to retrieve the subscription status for a user
 app.get('/subscription-status', async (req, res) => {
@@ -1746,10 +1788,13 @@ bot.on('callback_query', async (callbackQuery) => {
   const user = await getUser(chatId);
 
   let priceId;
+  let subscriptionType;
   if (callbackQuery.data === 'subscribe_yearly') {
     priceId = 'price_1PWKHrP9AlrL3WaNM00tMFk1';
+    subscriptionType = 'yearly';
   } else if (callbackQuery.data === 'subscribe_monthly') {
     priceId = 'price_1PWKHCP9AlrL3WaNZJ2wentT';
+    subscriptionType = 'monthly';
   } else if (callbackQuery.data === 'unsubscribe') {
     const stripeCustomerId = user.stripeCustomerId;
 
@@ -1768,10 +1813,10 @@ bot.on('callback_query', async (callbackQuery) => {
       await handleUnsubscribe(stripeCustomerId);
       await db.collection('users').doc(chatId.toString()).update({
         'subscription.status': 'canceled',
-        'subscription.expiry': null,
-        stripeSubscriptionId: null
+        'subscription.expiry': moment(subscriptions.data[0].current_period_end * 1000).toISOString(),
+        stripeSubscriptionId: subscriptions.data[0].id
       });
-      bot.sendMessage(chatId, '😿 Your subscription has been canceled.');
+      bot.sendMessage(chatId, `😿 Your subscription has been marked to cancel on ${moment(subscriptions.data[0].current_period_end * 1000).format('DD MMM YYYY')}.`);
     } catch (error) {
       console.error('Error during unsubscription:', error);
       bot.sendMessage(chatId, '🛠 There was an error processing your unsubscription. Please try again.');
@@ -1781,11 +1826,11 @@ bot.on('callback_query', async (callbackQuery) => {
 
   if (priceId) {
     try {
-      const sessionUrl = await createCheckoutSession(priceId, chatId);
+      const sessionUrl = await createCheckoutSession(priceId, chatId, subscriptionType);
       bot.sendMessage(chatId, `💳 Please complete your subscription payment using this link: ${sessionUrl}`);
     } catch (error) {
       console.error('Error creating Stripe session:', error);
-      bot.sendMessage(chatId, '🛠 There was an error processing your subscription. Please try again.');
+      bot.sendMessage(chatId, `🛠 There was an error processing your subscription. ${error.message}`);
     }
   }
 });
