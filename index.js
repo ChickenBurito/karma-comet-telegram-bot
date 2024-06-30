@@ -1532,10 +1532,13 @@ app.post('/webhook', (req, res) => {
     console.log('Received a live event.');
   }
 
-   // Handle the event
+  // Handle the event
   switch (event.type) {
     case 'checkout.session.completed':
       handleCheckoutSessionCompleted(event.data.object);
+      break;
+    case 'customer.subscription.created':
+      handleSubscriptionCreated(event.data.object);
       break;
     case 'customer.subscription.updated':
       if (event.data.object.cancel_at_period_end) {
@@ -1554,7 +1557,29 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ received: true });
 });
 
-//Function to handle checkout session completed
+const handleSubscriptionCreated = async (subscription) => {
+  const customerId = subscription.customer;
+  const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
+  const snapshot = await userRef.get();
+
+  if (!snapshot.empty) {
+    snapshot.forEach(async (doc) => {
+      console.log(`Subscription created for user ${doc.id}`);
+      const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
+      await doc.ref.update({
+        'subscription.status': subscription.status,
+        'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
+        stripeSubscriptionId: subscription.id
+      });
+
+      // Send a chat bot message to notify the user
+      bot.sendMessage(doc.id, '🎉 Your subscription was successful! Thank you for subscribing.');
+    });
+  } else {
+    console.log(`No user found with stripeCustomerId: ${customerId}`);
+  }
+};
+
 const handleCheckoutSessionCompleted = async (session) => {
   const customerId = session.customer;
   const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
