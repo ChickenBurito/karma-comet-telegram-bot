@@ -1572,14 +1572,8 @@ const handleCheckoutSessionCompleted = async (session) => {
     snapshot.forEach(async (doc) => {
       console.log(`Checkout session completed for user ${doc.id}`);
 
-      // Update the subscription to the new plan
-      const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
-        items: [{
-          id: subscription.items.data[0].id,
-          price: newPriceId,
-        }],
-        proration_behavior: 'create_prorations',
-      });
+      // Handle proration success
+      const updatedSubscription = await handleProrationSuccess(subscriptionId, newPriceId);
 
       console.log(`Updated subscription: ${JSON.stringify(updatedSubscription)}`);
 
@@ -1600,6 +1594,8 @@ const handleCheckoutSessionCompleted = async (session) => {
 
 // Function to handle proration success
 const handleProrationSuccess = async (subscriptionId, newPriceId) => {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
   const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
     items: [{
       id: subscription.items.data[0].id,
@@ -1610,7 +1606,6 @@ const handleProrationSuccess = async (subscriptionId, newPriceId) => {
 
   return updatedSubscription;
 };
-
 
 // Function to handle subscription create
 const handleSubscriptionCreated = async (subscription) => {
@@ -1700,9 +1695,10 @@ const handleSubscriptionDeletion = async (subscription) => {
   }
 };
 
-//Creating a Stripe Prorated checkout session
+// Function to handle create proration sesion
 const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
   console.log(`Retrieved subscription: ${JSON.stringify(subscription)}`);
 
   // Calculate the remaining time in the current period in seconds
@@ -1712,6 +1708,7 @@ const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
   // Calculate the proration amount
   const unitAmount = subscription.items.data[0].price.unit_amount;
   const proratedAmount = Math.round((unitAmount / (subscription.current_period_end - subscription.current_period_start)) * remainingTime);
+
   console.log(`Prorated amount: ${proratedAmount}`);
 
   // Create a Checkout Session for the proration
