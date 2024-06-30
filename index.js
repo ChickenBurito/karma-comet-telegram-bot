@@ -55,7 +55,7 @@ const app = express();
 app.use(bodyParser.raw({ type: 'application/json' })); // Stripe requires the raw body to construct the event
 
 //****IMPORTANT******// Set Not allowed commands for users with expired subscriptions //******IMPORTANT******//
-const notAllowedCommands = ['/meeting', '/meetingstatus', '/meetinghistory', '/feedbackstatus', '/feedbackhistory'];
+const notAllowedCommands = ['/meeting'];
 
 // Telegram bot token from BotFather
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -1962,8 +1962,10 @@ const checkSubscription = async (req, res, next) => {
           bot.sendMessage(chatId, '❗❗ Your trial period has expired.\n\n💳 Please subscribe to continue using the service.');
           return;
         } else if (user.subscription.status === 'expired') {
-          bot.sendMessage(chatId, '❗❗ Your subscription has expired.\n\n💳 Please subscribe to continue using the service.');
-          return;
+          if (notAllowedCommands.includes(command)) {
+            bot.sendMessage(chatId, '❗❗ Your subscription has expired.\n\n💳 Please subscribe to continue using the service.');
+            return;
+          }
         }
       }
     }
