@@ -1588,6 +1588,28 @@ const handleCheckoutSessionCompleted = async (session) => {
   }
 };
 
+// Function to handle subscription create
+const handleSubscriptionCreated = async (subscription) => {
+  const customerId = subscription.customer;
+  const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
+  const snapshot = await userRef.get();
+
+  if (!snapshot.empty) {
+    snapshot.forEach(async (doc) => {
+      console.log(`Subscription created for user ${doc.id}`);
+      const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
+      await doc.ref.update({
+        'subscription.status': subscription.status,
+        'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
+        stripeSubscriptionId: subscription.id
+      });
+    });
+  } else {
+    console.log(`No user found with stripeCustomerId: ${customerId}`);
+  }
+};
+
+
 // Function to handle subscription udate
 const handleSubscriptionUpdate = async (subscription) => {
   const customerId = subscription.customer;
@@ -1657,35 +1679,27 @@ const handleSubscriptionDeletion = async (subscription) => {
 const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-  // Calculate the prorated amount
-  const invoiceItem = await stripe.invoiceItems.create({
-    customer: subscription.customer,
-    amount: subscription.plan.amount * (subscription.current_period_end - Date.now()) / (subscription.current_period_end - subscription.current_period_start),
-    currency: subscription.plan.currency,
-    description: 'Prorated charge for plan change',
-  });
+  // Calculate the remaining time in the current period in seconds
+  const remainingTime = (subscription.current_period_end - Date.now() / 1000);
 
-  // Create the invoice
-  const invoice = await stripe.invoices.create({
-    customer: subscription.customer,
-    auto_advance: true, // Auto-finalize the invoice
-    collection_method: 'charge_automatically',
-  });
+  // Calculate the proration amount
+  const unitAmount = subscription.items.data[0].plan.amount;
+  const proratedAmount = Math.round((unitAmount / (subscription.current_period_end - subscription.current_period_start)) * remainingTime);
 
-  // Create a Checkout Session
+  // Create a Checkout Session for the proration
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ['card'],
     line_items: [
       {
         price_data: {
-          currency: invoice.currency,
+          currency: subscription.currency,
           product_data: {
             name: 'Prorated charge for plan change',
           },
-          unit_amount: invoice.total,
+          unit_amount: proratedAmount,
         },
         quantity: 1,
-      }
+      },
     ],
     mode: 'payment',
     customer: subscription.customer,
