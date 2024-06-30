@@ -1642,48 +1642,48 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
       });
     }
 
-     // Check existing subscriptions
-     const subscriptions = await stripe.subscriptions.list({ customer: customerId });
-     let existingSubscription = subscriptions.data.find(sub => sub.status === 'active' || sub.status === 'canceled');
- 
-     if (existingSubscription) {
-       if ((subscriptionType === 'monthly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') ||
-           (subscriptionType === 'yearly' && existingSubscription.items.data[0].price.id === 'price_1PWKHrP9AlrL3WaNM00tMFk1')) {
-         // If the subscription is of the same type, deny creating a new one
-         throw new Error('You already have an active subscription of this type.');
-       } else {
-         // Update the existing subscription to the new plan
-         await stripe.subscriptions.update(existingSubscription.id, {
-           items: [{
-             id: existingSubscription.items.data[0].id,
-             price: priceId,
-           }],
-           cancel_at_period_end: false, // Cancel the old subscription at period end
-         });
-       }
-     } else {
-       // Create a new subscription
-       const session = await stripe.checkout.sessions.create({
-         payment_method_types: ['card'],
-         line_items: [
-           {
-             price: priceId,
-             quantity: 1
-           }
-         ],
-         mode: 'subscription',
-         customer: customerId, // Link the session to the Stripe customer
-         success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-         cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
-       });
- 
-       return session.url;
-     }
-   } catch (error) {
-     console.error('Error creating or updating subscription:', error);
-     throw new Error(error.message || 'Internal Server Error');
-   }
- };
+    // Check existing subscriptions
+    const subscriptions = await stripe.subscriptions.list({ customer: customerId });
+    let existingSubscription = subscriptions.data.find(sub => sub.status === 'active' || sub.status === 'canceled');
+
+    if (existingSubscription) {
+      if ((subscriptionType === 'monthly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') ||
+          (subscriptionType === 'yearly' && existingSubscription.items.data[0].price.id === 'price_1PWKHrP9AlrL3WaNM00tMFk1')) {
+        // If the subscription is of the same type, deny creating a new one
+        throw new Error('You already have an active subscription of this type.');
+      } else {
+        // Update the existing subscription to the new plan
+        await stripe.subscriptions.update(existingSubscription.id, {
+          items: [{
+            id: existingSubscription.items.data[0].id,
+            price: priceId,
+          }],
+          cancel_at_period_end: false, // Cancel the old subscription at period end
+        });
+      }
+    } else {
+      // Create a new subscription
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1
+          }
+        ],
+        mode: 'subscription',
+        customer: customerId, // Link the session to the Stripe customer
+        success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
+      });
+
+      return session.url;
+    }
+  } catch (error) {
+    console.error('Error creating or updating subscription:', error);
+    throw new Error(error.message || 'Internal Server Error');
+  }
+};
 
 // Endpoint to retrieve the subscription status for a user
 app.get('/subscription-status', async (req, res) => {
@@ -1829,7 +1829,7 @@ bot.on('callback_query', async (callbackQuery) => {
       const sessionUrl = await createCheckoutSession(priceId, chatId, subscriptionType);
       bot.sendMessage(chatId, `💳 Please complete your subscription payment using this link: ${sessionUrl}`);
     } catch (error) {
-      console.error('Error creating Stripe session:', error);
+      console.error('Error creating or updating Stripe subscription:', error);
       bot.sendMessage(chatId, `🛠 There was an error processing your subscription. ${error.message}`);
     }
   }
