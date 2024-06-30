@@ -1599,21 +1599,6 @@ const handleCheckoutSessionCompleted = async (session) => {
   }
 };
 
-// Function to handle proration success
-const handleProrationSuccess = async (subscriptionId, newPriceId) => {
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-
-  const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
-    items: [{
-      id: subscription.items.data[0].id,
-      price: newPriceId,
-    }],
-    proration_behavior: 'create_prorations',
-  });
-
-  return updatedSubscription;
-};
-
 // Function to handle subscription create
 const handleSubscriptionCreated = async (subscription) => {
   const customerId = subscription.customer;
@@ -1635,8 +1620,7 @@ const handleSubscriptionCreated = async (subscription) => {
   }
 };
 
-
-// Function to handle subscription udate
+// Function to handle subscription update
 const handleSubscriptionUpdate = async (subscription) => {
   const customerId = subscription.customer;
   const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
@@ -1702,7 +1686,7 @@ const handleSubscriptionDeletion = async (subscription) => {
   }
 };
 
-// Function to handle create proration sesion
+// Function to create a prorated checkout session
 const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
@@ -1783,7 +1767,7 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
       } else {
         if (subscriptionType === 'yearly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') {
           // Create a prorated checkout session and return the URL
-          const sessionUrl = await createProratedCheckoutSession(existingSubscription.id, priceId, chatId);
+          const sessionUrl = await createProratedCheckoutSession(existingSubscription.id, priceId);
           return sessionUrl;
         } else {
           // Cancel the existing subscription at the end of the current period for downgrades
