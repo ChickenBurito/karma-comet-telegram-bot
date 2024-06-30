@@ -1532,14 +1532,20 @@ app.post('/webhook', (req, res) => {
     console.log('Received a live event.');
   }
 
-  // Handle the event
+   // Handle the event
   switch (event.type) {
-    case 'customer.subscription.created':
+    case 'checkout.session.completed':
+      handleCheckoutSessionCompleted(event.data.object);
+      break;
     case 'customer.subscription.updated':
-      handleSubscriptionUpdate(event.data.object);
+      if (event.data.object.cancel_at_period_end) {
+        handleSubscriptionCancellation(event.data.object);
+      } else {
+        handleSubscriptionUpdate(event.data.object);
+      }
       break;
     case 'customer.subscription.deleted':
-      handleSubscriptionCancellation(event.data.object);
+      handleSubscriptionDeletion(event.data.object);
       break;
     default:
       console.log(`Unhandled event type ${event.type}`);
@@ -1548,7 +1554,7 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ received: true });
 });
 
-// Function to handle checkout session completed
+//Function to handle checkout session completed
 const handleCheckoutSessionCompleted = async (session) => {
   const customerId = session.customer;
   const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
@@ -1574,7 +1580,7 @@ const handleCheckoutSessionCompleted = async (session) => {
   }
 };
 
-// Function to handle subscription updates
+// Function to handle subscription udate
 const handleSubscriptionUpdate = async (subscription) => {
   const customerId = subscription.customer;
   const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
@@ -1670,7 +1676,7 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
 
     // Check existing subscriptions
     const subscriptions = await stripe.subscriptions.list({ customer: customerId });
-    let existingSubscription = subscriptions.data.find(sub => sub.status === 'active' || sub.status === 'canceled');
+    let existingSubscription = subscriptions.data.find(sub => sub.status === 'active' || sub.status === 'canceled' && !sub.ended_at);
 
     if (existingSubscription) {
       if ((subscriptionType === 'monthly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') ||
@@ -1680,29 +1686,15 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
         console.error(errorMessage);
         throw new Error(errorMessage);
       } else {
-        // Create a new subscription session for updating the subscription
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ['card'],
-          line_items: [
-            {
-              price: priceId,
-              quantity: 1
-            }
-          ],
-          mode: 'subscription',
-          customer: customerId, // Link the session to the Stripe customer
-          subscription_data: {
-            items: [{
-              id: existingSubscription.items.data[0].id,
-              price: priceId
-            }],
-            cancel_at_period_end: false
-          },
-          success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
+        // Update the existing subscription to the new plan
+        await stripe.subscriptions.update(existingSubscription.id, {
+          items: [{
+            id: existingSubscription.items.data[0].id,
+            price: priceId,
+          }],
+          cancel_at_period_end: false // Ensure the subscription does not cancel at the period end
         });
-
-        return session.url;
+        return null; // No need to return a session URL for updates
       }
     } else {
       // Create a new subscription
@@ -1870,9 +1862,13 @@ bot.on('callback_query', async (callbackQuery) => {
   if (priceId) {
     try {
       const sessionUrl = await createCheckoutSession(priceId, chatId, subscriptionType);
-      bot.sendMessage(chatId, `💳 Please complete your subscription payment using this link: ${sessionUrl}`);
+      if (!sessionUrl) {
+        bot.sendMessage(chatId, '🎉 Your subscription has been updated successfully.');
+      } else {
+        bot.sendMessage(chatId, `💳 Please complete your subscription payment using this link: ${sessionUrl}`);
+      }
     } catch (error) {
-      console.error('Error creating or updating Stripe subscription:', error);
+      console.error('Error creating or updating Stripe subscription:', error.message);
       bot.sendMessage(chatId, `🛠 There was an error processing your subscription. ${error.message}`);
     }
   }
