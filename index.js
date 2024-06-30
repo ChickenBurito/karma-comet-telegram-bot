@@ -514,6 +514,9 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
   const [counterpartUsername, description] = match.slice(1);
+  // Check subscription status
+  const isAllowed = await checkSubscriptionStatus(chatId, command);
+  if (!isAllowed) return;
 
   try {
     // Check if the user is a recruiter
@@ -1935,44 +1938,34 @@ const handleUnsubscribe = async (customerId) => {
 };
 
 // Middleware to check subscription status
-const checkSubscription = async (req, res, next) => {
-  if (req.body.message) {
-    const chatId = req.body.message.chat.id.toString();
-    const userRef = db.collection('users').doc(chatId);
-    const userDoc = await userRef.get();
+const checkSubscriptionStatus = async (chatId, command) => {
+  const userRef = db.collection('users').doc(chatId.toString());
+  const userDoc = await userRef.get();
 
-    if (userDoc.exists) {
-      const user = userDoc.data();
-      const command = req.body.message.text.split(' ')[0];
+  if (userDoc.exists) {
+    const user = userDoc.data();
 
-      // Allow commands that do not require subscription check
-      if (!notAllowedCommands.includes(command)) {
-        return next();
-      }
+    if (user.userType === 'recruiter') {
+      const now = moment().tz(user.timeZone || 'UTC');
+      const expiryDate = moment(user.subscription.expiry).tz(user.timeZone || 'UTC');
 
-       // Check subscription status only for recruiters
-       if (user.userType === 'recruiter') {
-        const now = moment().tz(user.timeZone || 'UTC');
-        const expiryDate = moment(user.subscription.expiry).tz(user.timeZone || 'UTC');
-
-        if (user.subscription.status === 'trial' && now.isSameOrAfter(expiryDate)) {
-          await userRef.update({
-            'subscription.status': 'expired'
-          });
-          bot.sendMessage(chatId, '❗❗ Your trial period has expired.\n\n💳 Please subscribe to continue using the service.');
-          return;
-        } else if (user.subscription.status === 'expired') {
+      if (user.subscription.status === 'trial' && now.isSameOrAfter(expiryDate)) {
+        await userRef.update({
+          'subscription.status': 'expired'
+        });
+        bot.sendMessage(chatId, '❗❗ Your trial period has expired.\n\n💳 Please subscribe to continue using the service.');
+        return false;
+      } else if (user.subscription.status === 'expired') {
+        if (notAllowedCommands.includes(command)) {
           bot.sendMessage(chatId, '❗❗ Your subscription has expired.\n\n💳 Please subscribe to continue using the service.');
-          return;
+          return false;
         }
       }
     }
   }
-  next();
+  return true;
 };
 
-// Apply middleware to all bot commands
-app.use(checkSubscription);
 
 // Schedule the function to check subscription status every day
 schedule.scheduleJob('0 0 * * *', async () => {
