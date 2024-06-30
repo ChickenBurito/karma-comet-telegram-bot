@@ -1557,7 +1557,7 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ received: true });
 });
 
-// Handle checkout.session.completed
+// Handle checkout session completed
 const handleCheckoutSessionCompleted = async (session) => {
   const customerId = session.customer;
   const subscriptionId = session.metadata.subscription_id;
@@ -1572,20 +1572,27 @@ const handleCheckoutSessionCompleted = async (session) => {
     snapshot.forEach(async (doc) => {
       console.log(`Checkout session completed for user ${doc.id}`);
 
-      // Handle proration success
-      const updatedSubscription = await handleProrationSuccess(subscriptionId, newPriceId);
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+      // Update the subscription to the new plan
+      const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+        items: [{
+          id: subscription.items.data[0].id,
+          price: newPriceId,
+        }],
+        proration_behavior: 'create_prorations',
+      });
 
       console.log(`Updated subscription: ${JSON.stringify(updatedSubscription)}`);
 
-      const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
+      const userTimeZone = doc.data().timeZone || 'UTC';
       await doc.ref.update({
         'subscription.status': updatedSubscription.status,
         'subscription.expiry': moment(updatedSubscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
         stripeSubscriptionId: updatedSubscription.id
       });
 
-      // Send a chat bot message to notify the user
-      bot.sendMessage(doc.id, '🎉 Your subscription was successful! Thank you for subscribing.');
+      bot.sendMessage(doc.id, '🎉 Your subscription was successfully updated! Thank you for subscribing.');
     });
   } else {
     console.log(`No user found with stripeCustomerId: ${customerId}`);
@@ -1701,26 +1708,19 @@ const createProratedCheckoutSession = async (subscriptionId, newPriceId) => {
 
   console.log(`Retrieved subscription: ${JSON.stringify(subscription)}`);
 
-  // Calculate the remaining time in the current period in seconds
-  const remainingTime = subscription.current_period_end - Math.floor(Date.now() / 1000);
-  console.log(`Remaining time: ${remainingTime}`);
-
-  // Calculate the proration amount
   const unitAmount = subscription.items.data[0].price.unit_amount;
+  const remainingTime = subscription.current_period_end - Math.floor(Date.now() / 1000);
   const proratedAmount = Math.round((unitAmount / (subscription.current_period_end - subscription.current_period_start)) * remainingTime);
 
   console.log(`Prorated amount: ${proratedAmount}`);
 
-  // Create a Checkout Session for the proration
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ['card'],
     line_items: [
       {
         price_data: {
           currency: subscription.currency,
-          product_data: {
-            name: 'Prorated charge for plan change',
-          },
+          product_data: { name: 'Prorated charge for plan change' },
           unit_amount: proratedAmount,
         },
         quantity: 1,
