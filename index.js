@@ -1574,6 +1574,9 @@ const handleCheckoutSessionCompleted = async (session) => {
         'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
         stripeSubscriptionId: subscription.id
       });
+
+      // Send a chat bot message to notify the user
+      bot.sendMessage(doc.id, '🎉 Your subscription was successful! Thank you for subscribing.');
     });
   } else {
     console.log(`No user found with stripeCustomerId: ${customerId}`);
