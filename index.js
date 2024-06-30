@@ -513,10 +513,13 @@ bot.onText(/\/directmessage (\d+) (.+)/, async (msg, match) => {
 bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
   console.log('/meeting command received');
   const chatId = msg.chat.id;
-  const [counterpartUsername, description] = match.slice(1);
+  const command = '/meeting'; // Define the command here
+
   // Check subscription status
   const isAllowed = await checkSubscriptionStatus(chatId, command);
   if (!isAllowed) return;
+
+  const [counterpartUsername, description] = match.slice(1);
 
   try {
     // Check if the user is a recruiter
@@ -1965,7 +1968,6 @@ const checkSubscriptionStatus = async (chatId, command) => {
   }
   return true;
 };
-
 
 // Schedule the function to check subscription status every day
 schedule.scheduleJob('0 0 * * *', async () => {
