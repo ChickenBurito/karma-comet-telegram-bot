@@ -1972,7 +1972,7 @@ const checkSubscription = async (req, res, next) => {
 };
 
 // Apply middleware to all bot commands
-bot.use(checkSubscription);
+app.use(checkSubscription);
 
 // Schedule the function to check subscription status every day
 schedule.scheduleJob('0 0 * * *', async () => {
