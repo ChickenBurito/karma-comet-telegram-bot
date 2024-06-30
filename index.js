@@ -1548,6 +1548,32 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ received: true });
 });
 
+// Function to handle checkout session completed
+const handleCheckoutSessionCompleted = async (session) => {
+  const customerId = session.customer;
+  const userRef = db.collection('users').where('stripeCustomerId', '==', customerId);
+  const snapshot = await userRef.get();
+
+  if (!snapshot.empty) {
+    snapshot.forEach(async (doc) => {
+      console.log(`Checkout session completed for user ${doc.id}`);
+      const subscriptionId = session.subscription;
+
+      // Retrieve the updated subscription
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+      const userTimeZone = doc.data().timeZone || 'UTC'; // Retrieve user's time zone
+      await doc.ref.update({
+        'subscription.status': subscription.status,
+        'subscription.expiry': moment(subscription.current_period_end * 1000).tz(userTimeZone).toISOString(),
+        stripeSubscriptionId: subscription.id
+      });
+    });
+  } else {
+    console.log(`No user found with stripeCustomerId: ${customerId}`);
+  }
+};
+
 // Function to handle subscription updates
 const handleSubscriptionUpdate = async (subscription) => {
   const customerId = subscription.customer;
@@ -1650,16 +1676,33 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
       if ((subscriptionType === 'monthly' && existingSubscription.items.data[0].price.id === 'price_1PWKHCP9AlrL3WaNZJ2wentT') ||
           (subscriptionType === 'yearly' && existingSubscription.items.data[0].price.id === 'price_1PWKHrP9AlrL3WaNM00tMFk1')) {
         // If the subscription is of the same type, deny creating a new one
-        throw new Error('You already have an active subscription of this type.');
+        const errorMessage = 'You already have an active subscription of this type.';
+        console.error(errorMessage);
+        throw new Error(errorMessage);
       } else {
-        // Update the existing subscription to the new plan
-        await stripe.subscriptions.update(existingSubscription.id, {
-          items: [{
-            id: existingSubscription.items.data[0].id,
-            price: priceId,
-          }],
-          cancel_at_period_end: false, // Cancel the old subscription at period end
+        // Create a new subscription session for updating the subscription
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              price: priceId,
+              quantity: 1
+            }
+          ],
+          mode: 'subscription',
+          customer: customerId, // Link the session to the Stripe customer
+          subscription_data: {
+            items: [{
+              id: existingSubscription.items.data[0].id,
+              price: priceId
+            }],
+            cancel_at_period_end: false
+          },
+          success_url: `${process.env.BOT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.BOT_URL}/cancel?session_id={CHECKOUT_SESSION_ID}`
         });
+
+        return session.url;
       }
     } else {
       // Create a new subscription
@@ -1680,7 +1723,7 @@ const createCheckoutSession = async (priceId, chatId, subscriptionType) => {
       return session.url;
     }
   } catch (error) {
-    console.error('Error creating or updating subscription:', error);
+    console.error('Error creating or updating subscription:', error.message);
     throw new Error(error.message || 'Internal Server Error');
   }
 };
