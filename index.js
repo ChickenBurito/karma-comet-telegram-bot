@@ -625,33 +625,33 @@ bot.on('callback_query', async (callbackQuery) => {
 
   console.log(`Callback query received: ${callbackQuery.data}`);
 
-  if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
-    const meetingRequestId = data[3];
-    const durationText = data.slice(4).join(' '); // Join the rest of the array to get the full duration text
-    console.log(`Duration chosen: ${durationText}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+  try {
+    if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
+      const meetingRequestId = data[3];
+      const durationText = data.slice(4).join(' '); // Join the rest of the array to get the full duration text
+      console.log(`Duration chosen: ${durationText}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    let durationInMinutes;
-    switch (durationText) {
-      case '30 minutes':
-        durationInMinutes = 30;
-        break;
-      case '45 minutes':
-        durationInMinutes = 45;
-        break;
-      case '1 hour':
-        durationInMinutes = 60;
-        break;
-      case '1.5 hours':
-        durationInMinutes = 90;
-        break;
-      case '2 hours':
-        durationInMinutes = 120;
-        break;
-      default:
-        durationInMinutes = 60; // Default to 1 hour if unknown duration
-    }
+      let durationInMinutes;
+      switch (durationText) {
+        case '30 minutes':
+          durationInMinutes = 30;
+          break;
+        case '45 minutes':
+          durationInMinutes = 45;
+          break;
+        case '1 hour':
+          durationInMinutes = 60;
+          break;
+        case '1.5 hours':
+          durationInMinutes = 90;
+          break;
+        case '2 hours':
+          durationInMinutes = 120;
+          break;
+        default:
+          durationInMinutes = 60; // Default to 1 hour if unknown duration
+      }
 
-    try {
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       await requestRef.update({ meeting_duration: durationText, duration_in_minutes: durationInMinutes });
 
@@ -673,39 +673,33 @@ bot.on('callback_query', async (callbackQuery) => {
       };
 
       bot.sendMessage(chatId, '📅 Please choose the date for the meeting:', opts);
-    } catch (error) {
-      console.error('Error updating meeting duration:', error);
-      bot.sendMessage(chatId, '🛠 There was an error updating the meeting duration | Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'choose' && data[1] === 'date' && data[2] === 'meeting') {
-    const date = data[4];
-    const meetingRequestId = data[3];
-    console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    const availableTimes = [];
-    for (let hour = 9; hour <= 19; hour++) {
-      availableTimes.push(`${hour}:00`, `${hour}:30`);
-    }
+    } else if (data[0] === 'choose' && data[1] === 'date' && data[2] === 'meeting') {
+      const date = data[4];
+      const meetingRequestId = data[3];
+      console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    const opts = {
-      reply_markup: {
-        inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
-        ])
+      const availableTimes = [];
+      for (let hour = 9; hour <= 19; hour++) {
+        availableTimes.push(`${hour}:00`, `${hour}:30`);
       }
-    };
 
-    bot.sendMessage(chatId, `🗓 Please choose up to 3 available time slots for ${date}:`, opts);
-    callbackCache.del(callbackQueryId);
-  } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
-    const meetingRequestId = data[3];
-    const date = data[4];
-    const time = data[5];
-    console.log(`Time slot chosen: ${date} ${time}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+      const opts = {
+        reply_markup: {
+          inline_keyboard: availableTimes.map(time => [
+            { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
+          ])
+        }
+      };
 
-    try {
+      bot.sendMessage(chatId, `🗓 Please choose up to 3 available time slots for ${date}:`, opts);
+
+    } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
+      const meetingRequestId = data[3];
+      const date = data[4];
+      const time = data[5];
+      console.log(`Time slot chosen: ${date} ${time}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       const request = await requestRef.get();
 
@@ -736,16 +730,10 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(chatId, `🤷 Meeting request not found for ID: ${meetingRequestId}`);
       }
-    } catch (error) {
-      console.error('Error adding time slot:', error);
-      bot.sendMessage(chatId, '🛠 There was an error adding the time slot | Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'submit' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
 
-    try {
+    } else if (data[0] === 'submit' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
+
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       const request = await requestRef.get();
 
@@ -781,50 +769,36 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(chatId, '🤷 Meeting request not found.');
       }
-    } catch (error) {
-      console.error('Error submitting meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error submitting the meeting request | Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'cancel' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
 
-    try {
+    } else if (data[0] === 'cancel' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
+
       await db.collection('meetingRequests').doc(meetingRequestId).delete();
       bot.sendMessage(chatId, '⭕ Meeting request cancelled.');
-    } catch (error) {
-      console.error('Error cancelling meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error cancelling the meeting request | Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
     
-    // Handle acceptance of the meeting request
-  } else if (data[0] === 'accept' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
-    const selectedTimeSlot = data.slice(3).join(' ');
-  
-    try {
+    } else if (data[0] === 'accept' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
+      const selectedTimeSlot = data.slice(3).join(' ');
+
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       const request = await requestRef.get();
-  
+
       if (request.exists) {
         const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone, accepted } = request.data();
-  
+
         if (accepted) {
           bot.sendMessage(chatId, '🙅 This meeting has already been accepted.');
           return;
         }
-  
+
         if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
           // Convert selected time slot to UTC
           const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone).utc();
           const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
-  
+
           // Mark the meeting as accepted
           await requestRef.update({ accepted: true });
-  
+
           const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
           await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
             recruiter_name: request.data().recruiter_name,
@@ -846,11 +820,11 @@ bot.on('callback_query', async (callbackQuery) => {
             user_time_zone: user_time_zone,
             counterpart_time_zone: counterpart_time_zone
           });
-  
+
           // Convert back to user's time zone for display
           const recruiterMeetingTime = meetingStartTime.clone().tz(user_time_zone).format('YYYY-MM-DD HH:mm');
           const counterpartMeetingTime = meetingStartTime.clone().tz(counterpart_time_zone).format('YYYY-MM-DD HH:mm');
-  
+
           // Notify both parties
           bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${recruiterMeetingTime}.`);
           bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}.\n\n📍 Meeting is scheduled at ${counterpartMeetingTime}.`);
@@ -924,16 +898,10 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(chatId, '🤷 Meeting request not found.');
       }
-    } catch (error) {
-      console.error('Error accepting meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error accepting the meeting request. Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'decline' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
 
-    try {
+    } else if (data[0] === 'decline' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
+
       const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
       const request = await requestRef.get();
 
@@ -950,17 +918,11 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(chatId, '🤷 Meeting request not found.');
       }
-    } catch (error) {
-      console.error('Error declining meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error declining the meeting request. Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'set' && data[1] === 'feedback' && data[2] === 'days') {
-    const feedbackRequestId = data[3];
-    const daysToFeedback = parseInt(data[4], 10);
 
-    try {
+    } else if (data[0] === 'set' && data[1] === 'feedback' && data[2] === 'days') {
+      const feedbackRequestId = data[3];
+      const daysToFeedback = parseInt(data[4], 10);
+
       const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
       const feedbackRequest = await feedbackRequestRef.get();
 
@@ -985,16 +947,10 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(feedbackRequest.data().recruiter_id, '🤷 Feedback request not found.');
       }
-    } catch (error) {
-      console.error('Error setting feedback days:', error);
-      bot.sendMessage(chatId, '🛠 There was an error setting feedback days. Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'cancel' && data[1] === 'feedback') {
-    const feedbackRequestId = data[2];
 
-    try {
+    } else if (data[0] === 'cancel' && data[1] === 'feedback') {
+      const feedbackRequestId = data[2];
+
       const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
       const feedbackRequest = await feedbackRequestRef.get();
 
@@ -1008,16 +964,10 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(chatId, '🤷 Feedback request not found.');
       }
-    } catch (error) {
-      console.error('Error cancelling feedback request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error cancelling the feedback request. Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'approve' && data[1] === 'feedback') {
-    const feedbackRequestId = data[2];
 
-    try {
+    } else if (data[0] === 'approve' && data[1] === 'feedback') {
+      const feedbackRequestId = data[2];
+
       const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
       const feedbackRequest = await feedbackRequestRef.get();
 
@@ -1047,16 +997,10 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(chatId, '🤷 Feedback request not found.');
       }
-    } catch (error) {
-      console.error('Error approving feedback request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error approving the feedback request | Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
-    }
-  } else if (data[0] === 'decline' && data[1] === 'feedback') {
-    const feedbackRequestId = data[2];
 
-    try {
+    } else if (data[0] === 'decline' && data[1] === 'feedback') {
+      const feedbackRequestId = data[2];
+
       const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
       const feedbackRequest = await feedbackRequestRef.get();
 
@@ -1068,12 +1012,13 @@ bot.on('callback_query', async (callbackQuery) => {
       } else {
         bot.sendMessage(chatId, '🤷 Feedback request not found.');
       }
-    } catch (error) {
-      console.error('Error declining feedback request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error declining the feedback request. Please try again.');
-    } finally {
-      callbackCache.del(callbackQueryId);
     }
+  } catch (error) {
+    console.error('Error processing callback query:', error);
+    bot.sendMessage(chatId, '🛠 There was an error processing your request. Please try again.');
+  } finally {
+    // Reset the cache for this callback query ID to allow further steps
+    callbackCache.del(callbackQueryId);
   }
 });
 
