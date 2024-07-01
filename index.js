@@ -609,8 +609,11 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
-  const callbackQueryId = callbackQuery.id;
   const data = callbackQuery.data.split('_');
+  const callbackQueryId = callbackQuery.id;
+
+  // Detailed logging
+  console.log(`Received callback query with ID: ${callbackQueryId}, data: ${callbackQuery.data}`);
 
   // Check if the callback query ID is already in the cache
   if (isDuplicateCallback(callbackQueryId)) {
@@ -621,7 +624,7 @@ bot.on('callback_query', async (callbackQuery) => {
   // Store the callback query ID in the cache
   callbackCache.set(callbackQueryId, true);
 
-  console.log(`Callback query received: ${callbackQuery.data}`);
+  console.log(`Processing callback query: ${callbackQuery.data}`);
 
   try {
     if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
@@ -1053,6 +1056,8 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.sendMessage(chatId, '🛠 There was an error declining the feedback request. Please try again.');
       }
     }
+  } catch (error) {
+    console.error('Error processing callback query:', error);
   } finally {
     // Reset the cache for this callback query ID to allow further steps
     callbackCache.del(callbackQueryId);
