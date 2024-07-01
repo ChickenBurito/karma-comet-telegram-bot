@@ -609,22 +609,21 @@ bot.onText(/\/meeting @(\w+) (.+)/, async (msg, match) => {
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
-  const data = callbackQuery.data.split('_');
   const callbackQueryId = callbackQuery.id;
+  const callbackData = callbackQuery.data;
+  const data = callbackData.split('_');
 
-  // Detailed logging
-  console.log(`Received callback query with ID: ${callbackQueryId}, data: ${callbackQuery.data}`);
+  console.log(`Received callback query with ID: ${callbackQueryId}, data: ${callbackData}`);
 
   // Check if the callback query ID is already in the cache
-  if (isDuplicateCallback(callbackQueryId)) {
+  if (callbackCache.has(callbackQueryId)) {
     console.log(`Duplicate callback query received: ${callbackQueryId}`);
+    await bot.answerCallbackQuery(callbackQueryId); // Acknowledge the callback query
     return;
   }
 
   // Store the callback query ID in the cache
   callbackCache.set(callbackQueryId, true);
-
-  console.log(`Processing callback query: ${callbackQuery.data}`);
 
   try {
     if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
@@ -792,32 +791,32 @@ bot.on('callback_query', async (callbackQuery) => {
         console.error('Error cancelling meeting request:', error);
         bot.sendMessage(chatId, '🛠 There was an error cancelling the meeting request | Please try again.');
       }
-      
+
       // Handle acceptance of the meeting request
     } else if (data[0] === 'accept' && data[1] === 'meeting') {
       const meetingRequestId = data[2];
       const selectedTimeSlot = data.slice(3).join(' ');
-    
+
       try {
         const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
         const request = await requestRef.get();
-    
+
         if (request.exists) {
           const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone, accepted } = request.data();
-    
+
           if (accepted) {
             bot.sendMessage(chatId, '🙅 This meeting has already been accepted.');
             return;
           }
-    
+
           if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
             // Convert selected time slot to UTC
             const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone).utc();
             const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
-    
+
             // Mark the meeting as accepted
             await requestRef.update({ accepted: true });
-    
+
             const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
             await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
               recruiter_name: request.data().recruiter_name,
@@ -839,11 +838,11 @@ bot.on('callback_query', async (callbackQuery) => {
               user_time_zone: user_time_zone,
               counterpart_time_zone: counterpart_time_zone
             });
-    
+
             // Convert back to user's time zone for display
             const recruiterMeetingTime = meetingStartTime.clone().tz(user_time_zone).format('YYYY-MM-DD HH:mm');
             const counterpartMeetingTime = meetingStartTime.clone().tz(counterpart_time_zone).format('YYYY-MM-DD HH:mm');
-    
+
             // Notify both parties
             bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${recruiterMeetingTime}.`);
             bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}.\n\n📍 Meeting is scheduled at ${counterpartMeetingTime}.`);
@@ -891,7 +890,7 @@ bot.on('callback_query', async (callbackQuery) => {
                 console.error('Error scheduling feedback request:', error);
               }
             });
-            
+
             //-------- Activate trial if subscription is free and meeting is accepted ---------//
             const userRef = db.collection('users').doc(recruiter_id.toString());
             const userDoc = await userRef.get();
@@ -1056,11 +1055,10 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.sendMessage(chatId, '🛠 There was an error declining the feedback request. Please try again.');
       }
     }
-  } catch (error) {
-    console.error('Error processing callback query:', error);
   } finally {
-    // Reset the cache for this callback query ID to allow further steps
+    // Always delete the cache entry to allow further processing
     callbackCache.del(callbackQueryId);
+    console.log(`Callback query ID ${callbackQueryId} removed from cache`);
   }
 });
 
