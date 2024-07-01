@@ -14,7 +14,7 @@ const cron = require('node-cron'); //cron is used for scheduling tasks
 const moment = require('moment-timezone'); //sync users within different time-zones
 moment.tz.load(require('moment-timezone/data/packed/latest.json'));
 const NodeCache = require('node-cache');
-const callbackCache = new NodeCache({ stdTTL: 600, checkperiod: 60 }); // Cache with a TTL of 10 minutes
+const callbackCache = new NodeCache({ stdTTL: 600, checkperiod: 60 }); // Cache witbnnh a TTL of 10 minutes
 
 // Check required environment variables
 const requiredEnvVars = ['STRIPE_TEST_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_TEST_WEBHOOK_SECRET', 'BOT_URL'];
@@ -104,7 +104,17 @@ bot.setMyCommands(commands)
     console.error('Error setting bot commands:', err);
   });
 
-// Helper function to check if the user exists
+// Function to check and store callback query ID in cache
+const isDuplicateCallback = (callbackQueryId) => {
+  if (callbackCache.has(callbackQueryId)) {
+    return true; // Duplicate found
+  } else {
+    callbackCache.set(callbackQueryId, true);
+    return false; // Not a duplicate
+  }
+};
+
+  // Helper function to check if the user exists
 const getUser = async (chatId) => {
   const userRef = db.collection('users').doc(chatId.toString());
   const userDoc = await userRef.get();
@@ -126,7 +136,7 @@ const registerUser = async (chatId, userName) => {
         name: userName,
         chatId: chatId,
         registered_at: new Date().toISOString(),
-        score: 0,
+        KarmaPoints: 0,
         userType: 'jobSeeker', // Default user type
         isAdmin: false,
         subscription: {
@@ -428,7 +438,7 @@ bot.onText(/\/reset/, async (msg) => {
       name: userName,
       chatId: chatId,
       registered_at: new Date().toISOString(),
-      score: 0,
+      KarmaPoints: 0,
       userType: 'jobSeeker', // Reset to default user type
       isAdmin: false,
       subscription: {
@@ -607,445 +617,445 @@ bot.on('callback_query', async (callbackQuery) => {
   const data = callbackQuery.data.split('_');
   const callbackQueryId = callbackQuery.id;
 
-  // Check if the callback query ID is already in the cache
-  if (callbackCache.has(callbackQueryId)) {
-    console.log(`Duplicate callback query received: ${callbackQueryId}`);
-    return;
-  }
-
-  // Store the callback query ID in the cache
-  callbackCache.set(callbackQueryId, true);
-
-  console.log(`Callback query received: ${callbackQuery.data}`);
-
-  if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
-    const meetingRequestId = data[3];
-    const durationText = data.slice(4).join(' '); // Join the rest of the array to get the full duration text
-    console.log(`Duration chosen: ${durationText}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
-
-    let durationInMinutes;
-    switch (durationText) {
-      case '30 minutes':
-        durationInMinutes = 30;
-        break;
-      case '45 minutes':
-        durationInMinutes = 45;
-        break;
-      case '1 hour':
-        durationInMinutes = 60;
-        break;
-      case '1.5 hours':
-        durationInMinutes = 90;
-        break;
-      case '2 hours':
-        durationInMinutes = 120;
-        break;
-      default:
-        durationInMinutes = 60; // Default to 1 hour if unknown duration
+  try {
+    // Check if the callback query ID is already in the cache
+    if (isDuplicateCallback(callbackQueryId)) {
+      console.log(`Duplicate callback query received: ${callbackQueryId}`);
+      return;
     }
 
-    try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      await requestRef.update({ meeting_duration: durationText, duration_in_minutes: durationInMinutes });
+    console.log(`Callback query received: ${callbackQuery.data}`);
 
-      // Ask user to choose date
-      const dates = [];
-      const now = new Date();
-      for (let i = 0; i < 14; i++) {
-        const date = new Date(now);
-        date.setDate(now.getDate() + i);
-        dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
+    if (data[0] === 'choose' && data[1] === 'duration' && data[2] === 'meeting') {
+      const meetingRequestId = data[3];
+      const durationText = data.slice(4).join(' '); // Join the rest of the array to get the full duration text
+      console.log(`Duration chosen: ${durationText}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+
+      let durationInMinutes;
+      switch (durationText) {
+        case '30 minutes':
+          durationInMinutes = 30;
+          break;
+        case '45 minutes':
+          durationInMinutes = 45;
+          break;
+        case '1 hour':
+          durationInMinutes = 60;
+          break;
+        case '1.5 hours':
+          durationInMinutes = 90;
+          break;
+        case '2 hours':
+          durationInMinutes = 120;
+          break;
+        default:
+          durationInMinutes = 60; // Default to 1 hour if unknown duration
+      }
+
+      try {
+        const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+        await requestRef.update({ meeting_duration: durationText, duration_in_minutes: durationInMinutes });
+
+        // Ask user to choose date
+        const dates = [];
+        const now = new Date();
+        for (let i = 0; i < 14; i++) {
+          const date = new Date(now);
+          date.setDate(now.getDate() + i);
+          dates.push(date.toISOString().split('T')[0]); // Format YYYY-MM-DD
+        }
+
+        const opts = {
+          reply_markup: {
+            inline_keyboard: dates.map(date => [
+              { text: date, callback_data: `choose_date_meeting_${meetingRequestId}_${date}` }
+            ]).concat([[{ text: '✉ Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }], [{ text: '✖ Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]])
+          }
+        };
+
+        bot.sendMessage(chatId, '📅 Please choose the date for the meeting:', opts);
+      } catch (error) {
+        console.error('Error updating meeting duration:', error);
+        bot.sendMessage(chatId, '🛠 There was an error updating the meeting duration | Please try again.');
+      }
+    } else if (data[0] === 'choose' && data[1] === 'date' && data[2] === 'meeting') {
+      const date = data[4];
+      const meetingRequestId = data[3];
+      console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+
+      const availableTimes = [];
+      for (let hour = 9; hour <= 19; hour++) {
+        availableTimes.push(`${hour}:00`, `${hour}:30`);
       }
 
       const opts = {
         reply_markup: {
-          inline_keyboard: dates.map(date => [
-            { text: date, callback_data: `choose_date_meeting_${meetingRequestId}_${date}` }
-          ]).concat([[{ text: '✉ Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }], [{ text: '✖ Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]])
+          inline_keyboard: availableTimes.map(time => [
+            { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
+          ])
         }
       };
 
-      bot.sendMessage(chatId, '📅 Please choose the date for the meeting:', opts);
-    } catch (error) {
-      console.error('Error updating meeting duration:', error);
-      bot.sendMessage(chatId, '🛠 There was an error updating the meeting duration | Please try again.');
-    }
-  } else if (data[0] === 'choose' && data[1] === 'date' && data[2] === 'meeting') {
-    const date = data[4];
-    const meetingRequestId = data[3];
-    console.log(`Date chosen: ${date}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+      bot.sendMessage(chatId, `🗓 Please choose up to 3 available time slots for ${date}:`, opts);
+    } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
+      const meetingRequestId = data[3];
+      const date = data[4];
+      const time = data[5];
+      console.log(`Time slot chosen: ${date} ${time}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
 
-    const availableTimes = [];
-    for (let hour = 9; hour <= 19; hour++) {
-      availableTimes.push(`${hour}:00`, `${hour}:30`);
-    }
+      try {
+        const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+        const request = await requestRef.get();
 
-    const opts = {
-      reply_markup: {
-        inline_keyboard: availableTimes.map(time => [
-          { text: time, callback_data: `add_timeslot_meeting_${meetingRequestId}_${date}_${time}` }
-        ])
-      }
-    };
+        if (request.exists) {
+          const timeSlots = request.data().timeslots;
 
-    bot.sendMessage(chatId, `🗓 Please choose up to 3 available time slots for ${date}:`, opts);
-  } else if (data[0] === 'add' && data[1] === 'timeslot' && data[2] === 'meeting') {
-    const meetingRequestId = data[3];
-    const date = data[4];
-    const time = data[5];
-    console.log(`Time slot chosen: ${date} ${time}, Meeting Request ID: ${meetingRequestId} for chat ID: ${chatId}`);
+          if (timeSlots.length < 3) {
+            timeSlots.push(`${date} ${time}`);
+            await requestRef.update({ timeslots: timeSlots });
 
-    try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      const request = await requestRef.get();
+            bot.sendMessage(chatId, `✅ Added time slot: ${date} ${time}`);
 
-      if (request.exists) {
-        const timeSlots = request.data().timeslots;
-
-        if (timeSlots.length < 3) {
-          timeSlots.push(`${date} ${time}`);
-          await requestRef.update({ timeslots: timeSlots });
-
-          bot.sendMessage(chatId, `✅ Added time slot: ${date} ${time}`);
-
-          if (timeSlots.length >= 1) {
-            // Ask user if they want to create the meeting request
-            const opts = {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: '✉ Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }],
-                  [{ text: '✖ Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
-                ]
-              }
-            };
-            bot.sendMessage(chatId, '📨 Do you want to submit the meeting request now?', opts);
+            if (timeSlots.length >= 1) {
+              // Ask user if they want to create the meeting request
+              const opts = {
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '✉ Submit Meeting Request', callback_data: `submit_meeting_${meetingRequestId}` }],
+                    [{ text: '✖ Cancel', callback_data: `cancel_meeting_${meetingRequestId}` }]
+                  ]
+                }
+              };
+              bot.sendMessage(chatId, '📨 Do you want to submit the meeting request now?', opts);
+            }
+          } else {
+            bot.sendMessage(chatId, '❗You have already selected 3 time slots.');
           }
         } else {
-          bot.sendMessage(chatId, '❗You have already selected 3 time slots.');
+          bot.sendMessage(chatId, `🤷 Meeting request not found for ID: ${meetingRequestId}`);
         }
-      } else {
-        bot.sendMessage(chatId, `🤷 Meeting request not found for ID: ${meetingRequestId}`);
+      } catch (error) {
+        console.error('Error adding time slot:', error);
+        bot.sendMessage(chatId, '🛠 There was an error adding the time slot | Please try again.');
       }
-    } catch (error) {
-      console.error('Error adding time slot:', error);
-      bot.sendMessage(chatId, '🛠 There was an error adding the time slot | Please try again.');
-    }
-  } else if (data[0] === 'submit' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
+    } else if (data[0] === 'submit' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
 
-    try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      const request = await requestRef.get();
+      try {
+        const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+        const request = await requestRef.get();
 
-      if (request.exists) {
-        const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone } = request.data();
+        if (request.exists) {
+          const { recruiter_id, counterpart_id, description, timeslots, recruiter_name, counterpart_name, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone } = request.data();
 
-        // Validate that at least one date and one time slot are selected
-        if (timeslots.length === 0) {
-          bot.sendMessage(chatId, '❗ Please choose at least one date and one time slot before submitting the meeting request.');
-          return;
-        }
-
-        // Convert time slots to the counterpart's time zone
-        const convertedTimeslots = timeslots.map(slot => {
-          const dateTime = moment.tz(slot, 'YYYY-MM-DD HH:mm', user_time_zone);
-          return dateTime.clone().tz(counterpart_time_zone).format('YYYY-MM-DD HH:mm');
-        });
-
-        // Update request_submitted to true
-        await requestRef.update({ request_submitted: true });
-
-        // Send meeting request to counterpart
-        await bot.sendMessage(counterpart_id, `📬 You have a meeting request from *@${recruiter_name}*\n*Description:* ${description}.\n*Meeting duration:* ${meeting_duration}.\n\n📎 Please choose one of the available time slots:`, {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: convertedTimeslots.map(slot => [
-              { text: `📌 ${slot}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
-            ]).concat([[{ text: '✖ Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
+          // Validate that at least one date and one time slot are selected
+          if (timeslots.length === 0) {
+            bot.sendMessage(chatId, '❗ Please choose at least one date and one time slot before submitting the meeting request.');
+            return;
           }
-        });
 
-        bot.sendMessage(chatId, `✅ Meeting request sent to @${counterpart_name}.`);
-      } else {
-        bot.sendMessage(chatId, '🤷 Meeting request not found.');
-      }
-    } catch (error) {
-      console.error('Error submitting meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error submitting the meeting request | Please try again.');
-    }
-  } else if (data[0] === 'cancel' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
-
-    try {
-      await db.collection('meetingRequests').doc(meetingRequestId).delete();
-      bot.sendMessage(chatId, '⭕ Meeting request cancelled.');
-    } catch (error) {
-      console.error('Error cancelling meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error cancelling the meeting request | Please try again.');
-    }
-    
-    // Handle acceptance of the meeting request
-  } else if (data[0] === 'accept' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
-    const selectedTimeSlot = data.slice(3).join(' ');
-  
-    try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      const request = await requestRef.get();
-  
-      if (request.exists) {
-        const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone, accepted } = request.data();
-  
-        if (accepted) {
-          bot.sendMessage(chatId, '🙅 This meeting has already been accepted.');
-          return;
-        }
-  
-        if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
-          // Convert selected time slot to UTC
-          const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone).utc();
-          const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
-  
-          // Mark the meeting as accepted
-          await requestRef.update({ accepted: true });
-  
-          const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
-          await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
-            recruiter_name: request.data().recruiter_name,
-            recruiter_company_name: request.data().recruiter_company_name,
-            recruiter_id: request.data().recruiter_id,
-            counterpart_id: request.data().counterpart_id,
-            counterpart_name: request.data().counterpart_name,
-            meeting_request_id: meetingRequestId,
-            meeting_commitment_id: meetingCommitmentId,
-            created_at: request.data().created_at,
-            accepted_at: new Date().toISOString(),
-            meeting_scheduled_at: meetingStartTime.toISOString(),
-            meeting_end_time: meetingEndTime,
-            description: request.data().description,
-            recruiter_commitment_state: 'pending_meeting',
-            counterpart_commitment_state: 'pending_meeting',
-            meeting_duration: meeting_duration,
-            duration_in_minutes: duration_in_minutes,
-            user_time_zone: user_time_zone,
-            counterpart_time_zone: counterpart_time_zone
+          // Convert time slots to the counterpart's time zone
+          const convertedTimeslots = timeslots.map(slot => {
+            const dateTime = moment.tz(slot, 'YYYY-MM-DD HH:mm', user_time_zone);
+            return dateTime.clone().tz(counterpart_time_zone).format('YYYY-MM-DD HH:mm');
           });
-  
-          // Convert back to user's time zone for display
-          const recruiterMeetingTime = meetingStartTime.clone().tz(user_time_zone).format('YYYY-MM-DD HH:mm');
-          const counterpartMeetingTime = meetingStartTime.clone().tz(counterpart_time_zone).format('YYYY-MM-DD HH:mm');
-  
-          // Notify both parties
-          bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${recruiterMeetingTime}.`);
-          bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}.\n\n📍 Meeting is scheduled at ${counterpartMeetingTime}.`);
 
-          //-------------- Schedule feedback request generation 30 minutes after meeting end ----------//
-          const feedbackRequestTime = moment(meetingEndTime).add(30, 'minutes').toDate();
+          // Update request_submitted to true
+          await requestRef.update({ request_submitted: true });
 
-          const job = schedule.scheduleJob(feedbackRequestTime, async () => {
-            try {
-              const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
-              const commitment = await commitmentRef.get();
-
-              if (commitment.exists) {
-                const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
-                const feedbackCreatedAt = new Date().toISOString();
-
-                await db.collection('feedbackRequests').doc(feedbackRequestId).set({
-                  feedback_request_id: feedbackRequestId,
-                  recruiter_id: recruiter_id,
-                  recruiter_name: request.data().recruiter_name,
-                  counterpart_id: counterpart_id,
-                  counterpart_name: request.data().counterpart_name,
-                  feedback_request_created_at: feedbackCreatedAt,
-                  meeting_request_id: meetingRequestId,
-                  meeting_commitment_id: meetingCommitmentId,
-                  days_to_feedback: null,
-                  feedback_scheduled_at: null,
-                  feedback_submitted: false
-                });
-
-                const daysOpts = {
-                  reply_markup: {
-                    inline_keyboard: [
-                      ...[1, 2, 3, 4, 5, 6, 7].map(days => [
-                        { text: `${days} day${days > 1 ? 's' : ''}`, callback_data: `set_feedback_days_${feedbackRequestId}_${days}` }
-                      ]),
-                      [{ text: '✖ Cancel', callback_data: `cancel_feedback_${feedbackRequestId}` }]
-                    ]
-                  }
-                };
-
-                bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, { parse_mode: 'Markdown' }, daysOpts);
-              }
-            } catch (error) {
-              console.error('Error scheduling feedback request:', error);
+          // Send meeting request to counterpart
+          await bot.sendMessage(counterpart_id, `📬 You have a meeting request from *@${recruiter_name}*\n*Description:* ${description}.\n*Meeting duration:* ${meeting_duration}.\n\n📎 Please choose one of the available time slots:`, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: convertedTimeslots.map(slot => [
+                { text: `📌 ${slot}`, callback_data: `accept_meeting_${meetingRequestId}_${slot}` }
+              ]).concat([[{ text: '✖ Decline', callback_data: `decline_meeting_${meetingRequestId}` }]])
             }
           });
-          
-          //-------- Activate trial if subscription is free and meeting is accepted ---------//
-          const userRef = db.collection('users').doc(recruiter_id.toString());
-          const userDoc = await userRef.get();
-          if (userDoc.exists && userDoc.data().subscription.status === 'free') {
-            // Get the current date
-            const trialExpiryDate = new Date();
 
-            // Add 14 days to the current date to set the trial expiration date
-            trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
+          bot.sendMessage(chatId, `✅ Meeting request sent to @${counterpart_name}.`);
+        } else {
+          bot.sendMessage(chatId, '🤷 Meeting request not found.');
+        }
+      } catch (error) {
+        console.error('Error submitting meeting request:', error);
+        bot.sendMessage(chatId, '🛠 There was an error submitting the meeting request | Please try again.');
+      }
+    } else if (data[0] === 'cancel' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
 
-            // Update the user's subscription status to 'trial' and set the expiration date
-            await userRef.update({
-              'subscription.status': 'trial',
-              'subscription.expiry': trialExpiryDate.toISOString()
+      try {
+        await db.collection('meetingRequests').doc(meetingRequestId).delete();
+        bot.sendMessage(chatId, '⭕ Meeting request cancelled.');
+      } catch (error) {
+        console.error('Error cancelling meeting request:', error);
+        bot.sendMessage(chatId, '🛠 There was an error cancelling the meeting request | Please try again.');
+      }
+    } else if (data[0] === 'accept' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
+      const selectedTimeSlot = data.slice(3).join(' ');
+
+      try {
+        const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+        const request = await requestRef.get();
+
+        if (request.exists) {
+          const { recruiter_id, counterpart_id, meeting_duration, duration_in_minutes, user_time_zone, counterpart_time_zone, accepted } = request.data();
+
+          if (accepted) {
+            bot.sendMessage(chatId, '🙅 This meeting has already been accepted.');
+            return;
+          }
+
+          if (selectedTimeSlot && typeof selectedTimeSlot === 'string') {
+            // Convert selected time slot to UTC
+            const meetingStartTime = moment.tz(selectedTimeSlot, 'YYYY-MM-DD HH:mm', counterpart_time_zone).utc();
+            const meetingEndTime = meetingStartTime.clone().add(duration_in_minutes, 'minutes').toISOString();
+
+            // Mark the meeting as accepted
+            await requestRef.update({ accepted: true });
+
+            const meetingCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
+            await db.collection('meetingCommitments').doc(meetingCommitmentId).set({
+              recruiter_name: request.data().recruiter_name,
+              recruiter_company_name: request.data().recruiter_company_name,
+              recruiter_id: request.data().recruiter_id,
+              counterpart_id: request.data().counterpart_id,
+              counterpart_name: request.data().counterpart_name,
+              meeting_request_id: meetingRequestId,
+              meeting_commitment_id: meetingCommitmentId,
+              created_at: request.data().created_at,
+              accepted_at: new Date().toISOString(),
+              meeting_scheduled_at: meetingStartTime.toISOString(),
+              meeting_end_time: meetingEndTime,
+              description: request.data().description,
+              recruiter_commitment_state: 'pending_meeting',
+              counterpart_commitment_state: 'pending_meeting',
+              meeting_duration: meeting_duration,
+              duration_in_minutes: duration_in_minutes,
+              user_time_zone: user_time_zone,
+              counterpart_time_zone: counterpart_time_zone
             });
 
-            // Notify the user about their trial subscription activation
-            bot.sendMessage(recruiter_id, `🚀 Your *trial subscription* is now active for *14 days*, expiring on ${moment(trialExpiryDate).format('YYYY-MM-DD HH:mm', { parse_mode: 'Markdown' })}.`);
+            // Convert back to user's time zone for display
+            const recruiterMeetingTime = meetingStartTime.clone().tz(user_time_zone).format('YYYY-MM-DD HH:mm');
+            const counterpartMeetingTime = meetingStartTime.clone().tz(counterpart_time_zone).format('YYYY-MM-DD HH:mm');
+
+            // Notify both parties
+            bot.sendMessage(recruiter_id, `🎉 Your meeting request has been accepted by @${request.data().counterpart_name}.\n\n📍 Meeting is scheduled at ${recruiterMeetingTime}.`);
+            bot.sendMessage(counterpart_id, `🎉 You have accepted the meeting request from @${request.data().recruiter_name}.\n\n📍 Meeting is scheduled at ${counterpartMeetingTime}.`);
+
+            //-------------- Schedule feedback request generation 30 minutes after meeting end ----------//
+            const feedbackRequestTime = moment(meetingEndTime).add(30, 'minutes').toDate();
+
+            const job = schedule.scheduleJob(feedbackRequestTime, async () => {
+              try {
+                const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
+                const commitment = await commitmentRef.get();
+
+                if (commitment.exists) {
+                  const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
+                  const feedbackCreatedAt = new Date().toISOString();
+
+                  await db.collection('feedbackRequests').doc(feedbackRequestId).set({
+                    feedback_request_id: feedbackRequestId,
+                    recruiter_id: recruiter_id,
+                    recruiter_name: request.data().recruiter_name,
+                    counterpart_id: counterpart_id,
+                    counterpart_name: request.data().counterpart_name,
+                    feedback_request_created_at: feedbackCreatedAt,
+                    meeting_request_id: meetingRequestId,
+                    meeting_commitment_id: meetingCommitmentId,
+                    days_to_feedback: null,
+                    feedback_scheduled_at: null,
+                    feedback_submitted: false
+                  });
+
+                  const daysOpts = {
+                    reply_markup: {
+                      inline_keyboard: [
+                        ...[1, 2, 3, 4, 5, 6, 7].map(days => [
+                          { text: `${days} day${days > 1 ? 's' : ''}`, callback_data: `set_feedback_days_${feedbackRequestId}_${days}` }
+                        ]),
+                        [{ text: '✖ Cancel', callback_data: `cancel_feedback_${feedbackRequestId}` }]
+                      ]
+                    }
+                  };
+
+                  bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, { parse_mode: 'Markdown' }, daysOpts);
+                }
+              } catch (error) {
+                console.error('Error scheduling feedback request:', error);
+              }
+            });
+
+            //-------- Activate trial if subscription is free and meeting is accepted ---------//
+            const userRef = db.collection('users').doc(recruiter_id.toString());
+            const userDoc = await userRef.get();
+            if (userDoc.exists && userDoc.data().subscription.status === 'free') {
+              // Get the current date
+              const trialExpiryDate = new Date();
+
+              // Add 14 days to the current date to set the trial expiration date
+              trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
+
+              // Update the user's subscription status to 'trial' and set the expiration date
+              await userRef.update({
+                'subscription.status': 'trial',
+                'subscription.expiry': trialExpiryDate.toISOString()
+              });
+
+              // Notify the user about their trial subscription activation
+              bot.sendMessage(recruiter_id, `🚀 Your *trial subscription* is now active for *14 days*, expiring on ${moment(trialExpiryDate).format('YYYY-MM-DD HH:mm', { parse_mode: 'Markdown' })}.`);
+            }
+          } else {
+            bot.sendMessage(chatId, '🙅 Invalid time slot selected.');
           }
         } else {
-          bot.sendMessage(chatId, '🙅 Invalid time slot selected.');
+          bot.sendMessage(chatId, '🤷 Meeting request not found.');
         }
-      } else {
-        bot.sendMessage(chatId, '🤷 Meeting request not found.');
+      } catch (error) {
+        console.error('Error accepting meeting request:', error);
+        bot.sendMessage(chatId, '🛠 There was an error accepting the meeting request. Please try again.');
       }
-    } catch (error) {
-      console.error('Error accepting meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error accepting the meeting request. Please try again.');
-    }
-  } else if (data[0] === 'decline' && data[1] === 'meeting') {
-    const meetingRequestId = data[2];
+    } else if (data[0] === 'decline' && data[1] === 'meeting') {
+      const meetingRequestId = data[2];
 
-    try {
-      const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
-      const request = await requestRef.get();
+      try {
+        const requestRef = db.collection('meetingRequests').doc(meetingRequestId);
+        const request = await requestRef.get();
 
-      if (request.exists) {
-        const { recruiter_id } = request.data();
+        if (request.exists) {
+          const { recruiter_id } = request.data();
 
-        // Update counterpart_accepted to false
-        await requestRef.update({ counterpart_accepted: false });
+          // Update counterpart_accepted to false
+          await requestRef.update({ counterpart_accepted: false });
 
-        // Notify initiator
-        bot.sendMessage(recruiter_id, `⭕ Your meeting request has been declined by @${request.data().counterpart_name}.`);
+          // Notify initiator
+          bot.sendMessage(recruiter_id, `⭕ Your meeting request has been declined by @${request.data().counterpart_name}.`);
 
-        bot.sendMessage(chatId, '⭕ You have declined the meeting request.');
-      } else {
-        bot.sendMessage(chatId, '🤷 Meeting request not found.');
+          bot.sendMessage(chatId, '⭕ You have declined the meeting request.');
+        } else {
+          bot.sendMessage(chatId, '🤷 Meeting request not found.');
+        }
+      } catch (error) {
+        console.error('Error declining meeting request:', error);
+        bot.sendMessage(chatId, '🛠 There was an error declining the meeting request. Please try again.');
       }
-    } catch (error) {
-      console.error('Error declining meeting request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error declining the meeting request. Please try again.');
-    }
-  } else if (data[0] === 'set' && data[1] === 'feedback' && data[2] === 'days') {
-    const feedbackRequestId = data[3];
-    const daysToFeedback = parseInt(data[4], 10);
+    } else if (data[0] === 'set' && data[1] === 'feedback' && data[2] === 'days') {
+      const feedbackRequestId = data[3];
+      const daysToFeedback = parseInt(data[4], 10);
 
-    try {
-      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
-      const feedbackRequest = await feedbackRequestRef.get();
+      try {
+        const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+        const feedbackRequest = await feedbackRequestRef.get();
 
-      if (feedbackRequest.exists) {
-        const feedbackCreatedAt = feedbackRequest.data().feedback_request_created_at;
-        const feedbackScheduledAt = moment(feedbackCreatedAt).add(daysToFeedback, 'days').toISOString();
+        if (feedbackRequest.exists) {
+          const feedbackCreatedAt = feedbackRequest.data().feedback_request_created_at;
+          const feedbackScheduledAt = moment(feedbackCreatedAt).add(daysToFeedback, 'days').toISOString();
 
-        await feedbackRequestRef.update({ days_to_feedback: daysToFeedback, feedback_scheduled_at: feedbackScheduledAt });
+          await feedbackRequestRef.update({ days_to_feedback: daysToFeedback, feedback_scheduled_at: feedbackScheduledAt });
 
-        // Send feedback request to job seeker
-        await bot.sendMessage(feedbackRequest.data().counterpart_id, `📬 You have a feedback request from *@${feedbackRequest.data().recruiter_name}*\n*Description:* ${feedbackRequest.data().description}.\n*Feedback due in:* ${daysToFeedback} day(s).\n\n📎 Please approve or decline the feedback request:`, {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '✅ Approve', callback_data: `approve_feedback_${feedbackRequestId}` }],
-              [{ text: '✖ Decline', callback_data: `decline_feedback_${feedbackRequestId}` }]
-            ]
-          }
-        });
+          // Send feedback request to job seeker
+          await bot.sendMessage(feedbackRequest.data().counterpart_id, `📬 You have a feedback request from *@${feedbackRequest.data().recruiter_name}*\n*Description:* ${feedbackRequest.data().description}.\n*Feedback due in:* ${daysToFeedback} day(s).\n\n📎 Please approve or decline the feedback request:`, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '✅ Approve', callback_data: `approve_feedback_${feedbackRequestId}` }],
+                [{ text: '✖ Decline', callback_data: `decline_feedback_${feedbackRequestId}` }]
+              ]
+            }
+          });
 
-        bot.sendMessage(feedbackRequest.data().recruiter_id, `✅ Feedback request sent to @${feedbackRequest.data().counterpart_name}.`);
-      } else {
-        bot.sendMessage(feedbackRequest.data().recruiter_id, '🤷 Feedback request not found.');
+          bot.sendMessage(feedbackRequest.data().recruiter_id, `✅ Feedback request sent to @${feedbackRequest.data().counterpart_name}.`);
+        } else {
+          bot.sendMessage(feedbackRequest.data().recruiter_id, '🤷 Feedback request not found.');
+        }
+      } catch (error) {
+        console.error('Error setting feedback days:', error);
+        bot.sendMessage(chatId, '🛠 There was an error setting feedback days. Please try again.');
       }
-    } catch (error) {
-      console.error('Error setting feedback days:', error);
-      bot.sendMessage(chatId, '🛠 There was an error setting feedback days. Please try again.');
-    }
-  } else if (data[0] === 'cancel' && data[1] === 'feedback') {
-    const feedbackRequestId = data[2];
+    } else if (data[0] === 'cancel' && data[1] === 'feedback') {
+      const feedbackRequestId = data[2];
 
-    try {
-      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
-      const feedbackRequest = await feedbackRequestRef.get();
+      try {
+        const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+        const feedbackRequest = await feedbackRequestRef.get();
 
-      if (feedbackRequest.exists) {
-        await feedbackRequestRef.delete();
+        if (feedbackRequest.exists) {
+          await feedbackRequestRef.delete();
 
-        const { recruiter_id, counterpart_id } = feedbackRequest.data();
+          const { recruiter_id, counterpart_id } = feedbackRequest.data();
 
-        bot.sendMessage(recruiter_id, '⭕ Your feedback request was cancelled.');
-        bot.sendMessage(counterpart_id, '⭕ The feedback request was cancelled.');
-      } else {
-        bot.sendMessage(chatId, '🤷 Feedback request not found.');
+          bot.sendMessage(recruiter_id, '⭕ Your feedback request was cancelled.');
+          bot.sendMessage(counterpart_id, '⭕ The feedback request was cancelled.');
+        } else {
+          bot.sendMessage(chatId, '🤷 Feedback request not found.');
+        }
+      } catch (error) {
+        console.error('Error cancelling feedback request:', error);
+        bot.sendMessage(chatId, '🛠 There was an error cancelling the feedback request. Please try again.');
       }
-    } catch (error) {
-      console.error('Error cancelling feedback request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error cancelling the feedback request. Please try again.');
-    }
-  } else if (data[0] === 'approve' && data[1] === 'feedback') {
-    const feedbackRequestId = data[2];
+    } else if (data[0] === 'approve' && data[1] === 'feedback') {
+      const feedbackRequestId = data[2];
 
-    try {
-      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
-      const feedbackRequest = await feedbackRequestRef.get();
+      try {
+        const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+        const feedbackRequest = await feedbackRequestRef.get();
 
-      if (feedbackRequest.exists) {
-        const { recruiter_id, counterpart_id, recruiter_name, counterpart_name, meeting_request_id, meeting_commitment_id, feedback_scheduled_at } = feedbackRequest.data();
+        if (feedbackRequest.exists) {
+          const { recruiter_id, counterpart_id, recruiter_name, counterpart_name, meeting_request_id, meeting_commitment_id, feedback_scheduled_at } = feedbackRequest.data();
 
-        await feedbackRequestRef.update({ feedback_submitted: true });
+          await feedbackRequestRef.update({ feedback_submitted: true });
 
-        // Create feedback commitment
-        const feedbackCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
-        await db.collection('feedbackCommitments').doc(feedbackCommitmentId).set({
-          feedback_commitment_id: feedbackCommitmentId,
-          feedback_request_id: feedbackRequestId,
-          recruiter_id: recruiter_id,
-          recruiter_name: recruiter_name,
-          counterpart_id: counterpart_id,
-          counterpart_name: counterpart_name,
-          meeting_request_id: meeting_request_id,
-          meeting_commitment_id: meeting_commitment_id,
-          feedback_scheduled_at: feedback_scheduled_at,
-          recruiter_commitment_state: 'pending_feedback',
-          counterpart_commitment_state: 'pending_feedback'
-        });
+          // Create feedback commitment
+          const feedbackCommitmentId = `${Date.now()}${Math.floor((Math.random() * 100) + 1)}`;
+          await db.collection('feedbackCommitments').doc(feedbackCommitmentId).set({
+            feedback_commitment_id: feedbackCommitmentId,
+            feedback_request_id: feedbackRequestId,
+            recruiter_id: recruiter_id,
+            recruiter_name: recruiter_name,
+            counterpart_id: counterpart_id,
+            counterpart_name: counterpart_name,
+            meeting_request_id: meeting_request_id,
+            meeting_commitment_id: meeting_commitment_id,
+            feedback_scheduled_at: feedback_scheduled_at,
+            recruiter_commitment_state: 'pending_feedback',
+            counterpart_commitment_state: 'pending_feedback'
+          });
 
-        bot.sendMessage(recruiter_id, `📝 The feedback commitment has been created and is due on ${new Date(feedback_scheduled_at).toLocaleString()}.`);
-        bot.sendMessage(counterpart_id, '✅ Feedback request approved.');
-      } else {
-        bot.sendMessage(chatId, '🤷 Feedback request not found.');
+          bot.sendMessage(recruiter_id, `📝 The feedback commitment has been created and is due on ${new Date(feedback_scheduled_at).toLocaleString()}.`);
+          bot.sendMessage(counterpart_id, '✅ Feedback request approved.');
+        } else {
+          bot.sendMessage(chatId, '🤷 Feedback request not found.');
+        }
+      } catch (error) {
+        console.error('Error approving feedback request:', error);
+        bot.sendMessage(chatId, '🛠 There was an error approving the feedback request | Please try again.');
       }
-    } catch (error) {
-      console.error('Error approving feedback request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error approving the feedback request | Please try again.');
-    }
-  } else if (data[0] === 'decline' && data[1] === 'feedback') {
-    const feedbackRequestId = data[2];
+    } else if (data[0] === 'decline' && data[1] === 'feedback') {
+      const feedbackRequestId = data[2];
 
-    try {
-      const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
-      const feedbackRequest = await feedbackRequestRef.get();
+      try {
+        const feedbackRequestRef = db.collection('feedbackRequests').doc(feedbackRequestId);
+        const feedbackRequest = await feedbackRequestRef.get();
 
-      if (feedbackRequest.exists) {
-        await feedbackRequestRef.delete();
+        if (feedbackRequest.exists) {
+          await feedbackRequestRef.delete();
 
-        bot.sendMessage(feedbackRequest.data().recruiter_id, '⭕ Your feedback request was declined by the job seeker.');
-        bot.sendMessage(chatId, '⭕ You have declined the feedback request.');
-      } else {
-        bot.sendMessage(chatId, '🤷 Feedback request not found.');
+          bot.sendMessage(feedbackRequest.data().recruiter_id, '⭕ Your feedback request was declined by the job seeker.');
+          bot.sendMessage(chatId, '⭕ You have declined the feedback request.');
+        } else {
+          bot.sendMessage(chatId, '🤷 Feedback request not found.');
+        }
+      } catch (error) {
+        console.error('Error declining feedback request:', error);
+        bot.sendMessage(chatId, '🛠 There was an error declining the feedback request. Please try again.');
       }
-    } catch (error) {
-      console.error('Error declining feedback request:', error);
-      bot.sendMessage(chatId, '🛠 There was an error declining the feedback request. Please try again.');
     }
+  } finally {
+    // Reset the cache for this callback query ID to allow further steps
+    callbackCache.del(callbackQueryId);
   }
 });
 
@@ -1076,7 +1086,7 @@ bot.onText(/\/userinfo/, async (msg) => {
       responseMessage += `*Recruiter Type:* ${escapeMarkdown(userData.recruiterType || 'N/A')}\n`;
       responseMessage += `*Subscription Status:* ${escapeMarkdown(userData.subscription.status)}\n`;
       responseMessage += `*Subscription Expiry Date:* ${userData.subscription.expiry ? moment.tz(userData.subscription.expiry, userTimeZone).format('YYYY-MM-DD HH:mm') : 'N/A'}\n`;
-      responseMessage += `*Score:* ${userData.score}\n`;
+      responseMessage += `*Karma Score:* ${userData.KarmaPoints}\n`;
       responseMessage += `*Company Name:* ${escapeMarkdown(userData.companyName || 'N/A')}\n`;
       responseMessage += `*Time Zone:* ${escapeMarkdown(userData.timeZone || 'UTC')}\n`;
 
@@ -1411,15 +1421,15 @@ bot.on('callback_query', async (callbackQuery) => {
         const user = await userRef.get();
 
         if (user.exists) {
-          let newScore = user.data().score;
+          let newScore = user.data().KarmaPoints;
           if (status === 'attended') newScore += 10;
           else if (status === 'missed') newScore -= 10;
 
-          await userRef.update({ score: newScore });
+          await userRef.update({ KarmaPoints: newScore });
 
           const userTimeZone = user.data().timeZone || 'UTC';
 
-          bot.sendMessage(chatId, `Your status for ${commitment.data().type} commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new score is *${newScore}*.`, { parse_mode: 'Markdown' });
+          bot.sendMessage(chatId, `Your status for ${commitment.data().type} commitment "${commitment.data().description}" has been updated to *${status}*.\n\nYour new Karma Score is *${newScore}*.`, { parse_mode: 'Markdown' });
 
           const counterpartId = user.data().userType === 'recruiter' ? commitment.data().counterpart_id : commitment.data().recruiter_id;
           const opts = {
@@ -1467,14 +1477,14 @@ bot.on('callback_query', async (callbackQuery) => {
         const user = await userRef.get();
 
         if (user.exists) {
-          let newScore = user.data().score;
+          let newScore = user.data().KarmaPoints;
           if (status === 'fulfilled') {
             newScore += 10;
-            await userRef.update({ score: newScore });
+            await userRef.update({ KarmaPoints: newScore });
             await commitmentRef.update({ [`${userType}_commitment_state`]: 'fulfilled' });
           } else if (status === 'missed') {
             newScore -= 10;
-            await userRef.update({ score: newScore });
+            await userRef.update({ KarmaPoints: newScore });
             await commitmentRef.update({ [`${userType}_commitment_state`]: 'missed' });
           }
 
