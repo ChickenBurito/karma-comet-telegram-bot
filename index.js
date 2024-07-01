@@ -13,6 +13,8 @@ const endpointSecret = process.env.STRIPE_TEST_WEBHOOK_SECRET;
 const cron = require('node-cron'); //cron is used for scheduling tasks
 const moment = require('moment-timezone'); //sync users within different time-zones
 moment.tz.load(require('moment-timezone/data/packed/latest.json'));
+const NodeCache = require('node-cache');
+const callbackCache = new NodeCache({ stdTTL: 600, checkperiod: 60 }); // Cache with a TTL of 10 minutes
 
 // Check required environment variables
 const requiredEnvVars = ['STRIPE_TEST_SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'FIREBASE_SERVICE_ACCOUNT_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_TEST_WEBHOOK_SECRET', 'BOT_URL'];
@@ -246,6 +248,16 @@ bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
   const data = callbackQuery.data;
+  const callbackQueryId = callbackQuery.id;
+
+  // Check if the callback query ID is already in the cache
+  if (callbackCache.has(callbackQueryId)) {
+    console.log(`Duplicate callback query received: ${callbackQueryId}`);
+    return;
+  }
+
+  // Store the callback query ID in the cache
+  callbackCache.set(callbackQueryId, true);
 
   if (data === 'register') {
     const userName = callbackQuery.from.username || 'User'; // Use callbackQuery.from.username
@@ -593,6 +605,16 @@ bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
   const data = callbackQuery.data.split('_');
+  const callbackQueryId = callbackQuery.id;
+
+  // Check if the callback query ID is already in the cache
+  if (callbackCache.has(callbackQueryId)) {
+    console.log(`Duplicate callback query received: ${callbackQueryId}`);
+    return;
+  }
+
+  // Store the callback query ID in the cache
+  callbackCache.set(callbackQueryId, true);
 
   console.log(`Callback query received: ${callbackQuery.data}`);
 
@@ -1363,6 +1385,16 @@ function scheduleFeedbackCommitmentPrompt(feedbackScheduledAt, commitmentId, des
 bot.on('callback_query', async (callbackQuery) => {
   const msg = callbackQuery.message;
   const [action, commitmentId, status] = callbackQuery.data.split('_');
+  const callbackQueryId = callbackQuery.id;
+
+  // Check if the callback query ID is already in the cache
+  if (callbackCache.has(callbackQueryId)) {
+    console.log(`Duplicate callback query received: ${callbackQueryId}`);
+    return;
+  }
+
+  // Store the callback query ID in the cache
+  callbackCache.set(callbackQueryId, true);
 
   if (action === 'status') {
     const chatId = msg.chat.id;
@@ -1876,6 +1908,16 @@ bot.onText(/\/subscribe/, async (msg) => {
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const user = await getUser(chatId);
+  const callbackQueryId = callbackQuery.id;
+
+  // Check if the callback query ID is already in the cache
+  if (callbackCache.has(callbackQueryId)) {
+    console.log(`Duplicate callback query received: ${callbackQueryId}`);
+    return;
+  }
+
+  // Store the callback query ID in the cache
+  callbackCache.set(callbackQueryId, true);
 
   let priceId;
   let subscriptionType;
