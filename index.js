@@ -761,6 +761,8 @@ bot.on('callback_query', async (callbackQuery) => {
       console.error('Error cancelling meeting request:', error);
       bot.sendMessage(chatId, '🛠 There was an error cancelling the meeting request | Please try again.');
     }
+    
+    // Handle acceptance of the meeting request
   } else if (data[0] === 'accept' && data[1] === 'meeting') {
     const meetingRequestId = data[2];
     const selectedTimeSlot = data.slice(3).join(' ');
@@ -817,42 +819,47 @@ bot.on('callback_query', async (callbackQuery) => {
 
           //-------------- Schedule feedback request generation 30 minutes after meeting end ----------//
           const feedbackRequestTime = moment(meetingEndTime).add(30, 'minutes').toDate();
-          setTimeout(async () => {
-            const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
-            const commitment = await commitmentRef.get();
 
-            if (commitment.exists) {
-              const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
-              const feedbackCreatedAt = new Date().toISOString();
+          const job = schedule.scheduleJob(feedbackRequestTime, async () => {
+            try {
+              const commitmentRef = db.collection('meetingCommitments').doc(meetingCommitmentId);
+              const commitment = await commitmentRef.get();
 
-              await db.collection('feedbackRequests').doc(feedbackRequestId).set({
-                feedback_request_id: feedbackRequestId,
-                recruiter_id: recruiter_id,
-                recruiter_name: request.data().recruiter_name,
-                counterpart_id: counterpart_id,
-                counterpart_name: request.data().counterpart_name,
-                feedback_request_created_at: feedbackCreatedAt,
-                meeting_request_id: meetingRequestId,
-                meeting_commitment_id: meetingCommitmentId,
-                days_to_feedback: null,
-                feedback_scheduled_at: null,
-                feedback_submitted: false
-              });
+              if (commitment.exists) {
+                const feedbackRequestId = `${Date.now()}${Math.floor((Math.random() * 1000) + 1)}`;
+                const feedbackCreatedAt = new Date().toISOString();
 
-              const daysOpts = {
-                reply_markup: {
-                  inline_keyboard: [
-                    ...[1, 2, 3, 4, 5, 6, 7].map(days => [
-                      { text: `${days} day${days > 1 ? 's' : ''}`, callback_data: `set_feedback_days_${feedbackRequestId}_${days}` }
-                    ]),
-                    [{ text: '✖ Cancel', callback_data: `cancel_feedback_${feedbackRequestId}` }]
-                  ]
-                }
-              };
+                await db.collection('feedbackRequests').doc(feedbackRequestId).set({
+                  feedback_request_id: feedbackRequestId,
+                  recruiter_id: recruiter_id,
+                  recruiter_name: request.data().recruiter_name,
+                  counterpart_id: counterpart_id,
+                  counterpart_name: request.data().counterpart_name,
+                  feedback_request_created_at: feedbackCreatedAt,
+                  meeting_request_id: meetingRequestId,
+                  meeting_commitment_id: meetingCommitmentId,
+                  days_to_feedback: null,
+                  feedback_scheduled_at: null,
+                  feedback_submitted: false
+                });
 
-              bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, { parse_mode: 'Markdown' }, daysOpts);
+                const daysOpts = {
+                  reply_markup: {
+                    inline_keyboard: [
+                      ...[1, 2, 3, 4, 5, 6, 7].map(days => [
+                        { text: `${days} day${days > 1 ? 's' : ''}`, callback_data: `set_feedback_days_${feedbackRequestId}_${days}` }
+                      ]),
+                      [{ text: '✖ Cancel', callback_data: `cancel_feedback_${feedbackRequestId}` }]
+                    ]
+                  }
+                };
+
+                bot.sendMessage(recruiter_id, `📆 Please specify the *number of days* you will take to provide feedback for the meeting "${commitment.data().description}":`, { parse_mode: 'Markdown' }, daysOpts);
+              }
+            } catch (error) {
+              console.error('Error scheduling feedback request:', error);
             }
-          }, feedbackRequestTime - new Date());
+          });
           
           //-------- Activate trial if subscription is free and meeting is accepted ---------//
           const userRef = db.collection('users').doc(recruiter_id.toString());
